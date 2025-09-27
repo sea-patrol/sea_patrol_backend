@@ -2,7 +2,7 @@ spring:
   application:
     name: sea.patrol
   r2dbc:
-    url: r2dbc:h2:file:///db/sea_patrol_db;AUTO_SERVER=TRUE
+    url: r2dbc:h2:file:./db/sea_patrol_db;AUTO_SERVER=TRUE
     driver: h2
     username: sa
     password: sa
