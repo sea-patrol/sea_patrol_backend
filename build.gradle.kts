@@ -25,11 +25,21 @@ repositories {
 }
 
 dependencies {
-	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-webflux")
+//	implementation ("org.springframework.boot:spring-boot-starter-security")
+	implementation ("org.springframework.session:spring-session-core")
+	implementation("org.mapstruct:mapstruct:1.6.3")
+	implementation ("org.springframework.boot:spring-boot-starter-data-r2dbc")
+	implementation("org.liquibase:liquibase-core")
+
+	runtimeOnly("io.r2dbc:r2dbc-h2")
+	runtimeOnly("com.h2database:h2")
+
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 	annotationProcessor("org.projectlombok:lombok")
+	annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
