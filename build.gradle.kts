@@ -31,6 +31,7 @@ dependencies {
 	implementation("org.mapstruct:mapstruct:1.6.3")
 	implementation ("org.springframework.boot:spring-boot-starter-validation")
 	implementation("io.jsonwebtoken:jjwt:0.9.1")
+	implementation("javax.xml.bind:jaxb-api:2.3.1")
 
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
