@@ -1,5 +1,6 @@
 package ru.sea.patrol.repository;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.entity.UserEntity;
 
@@ -12,4 +13,6 @@ public interface UserRepository {
     Mono<UserEntity> findById(UUID id);
 
     Mono<UserEntity> save(UserEntity userEntity);
+
+    Flux<UserEntity> findAll();
 }

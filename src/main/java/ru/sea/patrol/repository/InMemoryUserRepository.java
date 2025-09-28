@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.entity.UserEntity;
 import ru.sea.patrol.entity.UserRole;
@@ -54,6 +55,11 @@ public class InMemoryUserRepository implements UserRepository {
         usersWithIdKey.put(userEntity.getId(), userEntity);
         usersWithNameKey.put(userEntity.getUsername(), userEntity);
         return Mono.just(userEntity);
+    }
+
+    @Override
+    public Flux<UserEntity> findAll() {
+        return Flux.fromIterable(usersWithIdKey.values());
     }
 
     @Override
