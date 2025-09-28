@@ -1,13 +1,12 @@
 package ru.sea.patrol.security;
 
 import lombok.RequiredArgsConstructor;
-import ru.sea.patrol.entity.UserEntity;
-import ru.sea.patrol.exception.UnauthorizedException;
-import ru.sea.patrol.service.UserService;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.exception.UnauthorizedException;
+import ru.sea.patrol.service.UserService;
 
 @Component
 @RequiredArgsConstructor

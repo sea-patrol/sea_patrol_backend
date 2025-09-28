@@ -15,12 +15,12 @@ import ru.sea.patrol.service.UserService;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
-public class AuthRestControllerV1 {
+public class AuthController {
+
     private final SecurityService securityService;
     private final UserService userService;
 
-
-    @PostMapping("/register")
+    @PostMapping("/signup")
     public Mono<UserDto> register(@RequestBody UserRegistrationDto dto) {
         return userService.registerUser(dto);
     }

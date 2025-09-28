@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class UserRepositoryImpl implements UserRepository {
+public class InMemoryUserRepository implements UserRepository {
 
     private final Map<UUID, UserEntity> usersWithIdKey = new ConcurrentHashMap<>();
     private final Map<String, UserEntity> usersWithNameKey = new ConcurrentHashMap<>();
