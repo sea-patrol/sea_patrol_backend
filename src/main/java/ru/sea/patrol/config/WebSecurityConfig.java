@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.server.ServerWebExchange;
 import ru.sea.patrol.security.AuthenticationManager;
 import ru.sea.patrol.security.BearerTokenServerAuthenticationConverter;
@@ -21,6 +22,8 @@ import org.springframework.security.web.server.authentication.AuthenticationWebF
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Slf4j
 @Configuration
 @EnableWebFluxSecurity
@@ -36,6 +39,15 @@ public class WebSecurityConfig {
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, AuthenticationManager authenticationManager) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .cors(cors -> cors.configurationSource(request -> {
+                    var config = new CorsConfiguration();
+                    config.setAllowedOrigins(List.of("http://localhost:5173")); // Разрешаем только этот домен
+                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                    config.setAllowedHeaders(List.of("*"));
+                    config.setAllowCredentials(true); // Если нужно передавать cookies
+                    config.setMaxAge(3600L); // Время жизни предварительного запроса (preflight)
+                    return config;
+                }))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.OPTIONS).permitAll() // Разрешаем OPTIONS запросы
                         .pathMatchers(publicRoutes).permitAll() // Публичные маршруты
