@@ -1,7 +1,5 @@
 package ru.sea.patrol.dto;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,5 +18,4 @@ public class AuthResponseDto {
     private String token;
     private Date issuedAt;
     private Date expiresAt;
-
 }
