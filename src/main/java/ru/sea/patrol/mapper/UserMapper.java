@@ -11,23 +11,11 @@ import org.mapstruct.InheritInverseConfiguration;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
-public abstract class UserMapper {
+public interface UserMapper {
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    public abstract UserDto map(UserEntity entity);
+    UserDto map(UserEntity entity);
 
     @Mapping(target = "role", constant = "USER")
-    @Mapping(target = "createdAt", expression = "java(java.time.LocalDateTime.now())")
-    @Mapping(target = "updatedAt", expression = "java(java.time.LocalDateTime.now())")
-    @Mapping(target = "locked", constant = "false")
-    @Mapping(target = "password", source = "password", qualifiedByName = "passwordEncoder")
-    public abstract UserEntity map(UserRegistrationDto dto);
-
-    @Named("passwordEncoder")
-    protected String encodePassword(String password) {
-        return passwordEncoder.encode(password);
-    }
+    UserEntity map(UserRegistrationDto dto);
 
 }

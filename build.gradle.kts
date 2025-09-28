@@ -30,14 +30,7 @@ dependencies {
 	implementation ("org.springframework.session:spring-session-core")
 	implementation("org.mapstruct:mapstruct:1.6.3")
 	implementation ("org.springframework.boot:spring-boot-starter-validation")
-	implementation ("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation ("org.springframework.boot:spring-boot-starter-data-r2dbc")
-	implementation("org.liquibase:liquibase-core")
 	implementation("io.jsonwebtoken:jjwt:0.9.1")
-	implementation("javax.xml.bind:jaxb-api")
-
-	runtimeOnly("io.r2dbc:r2dbc-h2")
-	runtimeOnly("com.h2database:h2")
 
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")

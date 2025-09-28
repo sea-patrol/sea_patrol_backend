@@ -1,6 +1,10 @@
 package ru.sea.patrol.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.server.ServerWebExchange;
 import ru.sea.patrol.security.AuthenticationManager;
 import ru.sea.patrol.security.BearerTokenServerAuthenticationConverter;
 import ru.sea.patrol.security.JwtHandler;
@@ -19,6 +23,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Configuration
+@EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
 public class WebSecurityConfig {
 
@@ -30,28 +35,30 @@ public class WebSecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, AuthenticationManager authenticationManager) {
         return http
-                .csrf().disable()
-                .authorizeExchange()
-                .pathMatchers(HttpMethod.OPTIONS)
-                .permitAll()
-                .pathMatchers(publicRoutes)
-                .permitAll()
-                .anyExchange()
-                .authenticated()
-                .and()
-                .exceptionHandling()
-                .authenticationEntryPoint((swe , e) -> {
-                    log.error("IN securityWebFilterChain - unauthorized error: {}", e.getMessage());
-                    return Mono.fromRunnable(() -> swe.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED));
-                })
-                .accessDeniedHandler((swe, e) -> {
-                    log.error("IN securityWebFilterChain - access denied: {}", e.getMessage());
-
-                    return Mono.fromRunnable(() -> swe.getResponse().setStatusCode(HttpStatus.FORBIDDEN));
-                })
-                .and()
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .authorizeExchange(exchanges -> exchanges
+                        .pathMatchers(HttpMethod.OPTIONS).permitAll() // Разрешаем OPTIONS запросы
+                        .pathMatchers(publicRoutes).permitAll() // Публичные маршруты
+                        .anyExchange().authenticated() // Все остальные маршруты требуют аутентификации
+                )
+                .exceptionHandling(exceptionHandling -> exceptionHandling
+                        .authenticationEntryPoint(this::handleAuthenticationError) // Обработка ошибок аутентификации
+                        .accessDeniedHandler(this::handleAccessDeniedError) // Обработка ошибок доступа
+                )
                 .addFilterAt(bearerAuthenticationFilter(authenticationManager), SecurityWebFiltersOrder.AUTHENTICATION)
                 .build();
+    }
+
+    private Mono<Void> handleAuthenticationError(ServerWebExchange exchange, AuthenticationException ex) {
+        log.error("IN securityWebFilterChain - unauthorized error: {}", ex.getMessage());
+        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+        return exchange.getResponse().setComplete();
+    }
+
+    private Mono<Void> handleAccessDeniedError(ServerWebExchange exchange, AccessDeniedException ex) {
+        log.error("IN securityWebFilterChain - access denied: {}", ex.getMessage());
+        exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+        return exchange.getResponse().setComplete();
     }
 
     private AuthenticationWebFilter bearerAuthenticationFilter(AuthenticationManager authenticationManager) {
