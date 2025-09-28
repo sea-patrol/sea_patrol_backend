@@ -21,8 +21,8 @@ public class AuthController {
     private final UserService userService;
 
     @PostMapping("/signup")
-    public Mono<UserDto> register(@RequestBody UserRegistrationDto dto) {
-        return userService.registerUser(dto);
+    public Mono<UserDto> signup(@RequestBody UserRegistrationDto dto) {
+        return userService.signup(dto);
     }
 
     @PostMapping("/login")

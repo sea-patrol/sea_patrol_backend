@@ -20,7 +20,7 @@ public class UserService {
     private final UserMapper userMapper;
     private final UserRepository userRepository;
 
-    public Mono<UserDto> registerUser(UserRegistrationDto dto) {
+    public Mono<UserDto> signup(UserRegistrationDto dto) {
         UserEntity entity = userMapper.map(dto);
         return userRepository.save(entity).map(userMapper::map).doOnSuccess(u -> {
             log.info("IN registerUser - user: {} created", u);
