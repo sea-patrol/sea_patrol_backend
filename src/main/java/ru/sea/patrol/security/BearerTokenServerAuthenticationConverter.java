@@ -2,6 +2,8 @@ package ru.sea.patrol.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
 import org.springframework.web.server.ServerWebExchange;
@@ -18,15 +20,18 @@ public class BearerTokenServerAuthenticationConverter implements ServerAuthentic
 
     @Override
     public Mono<Authentication> convert(ServerWebExchange exchange) {
-        return extractHeader(exchange)
+        return extractJwtToken(exchange)
                 .flatMap(getBearerValue)
                 .flatMap(jwtHandler::check)
                 .flatMap(UserAuthenticationBearer::create);
     }
 
-    private Mono<String> extractHeader(ServerWebExchange exchange) {
-        return Mono.justOrEmpty(exchange.getRequest()
-        .getHeaders()
-        .getFirst(HttpHeaders.AUTHORIZATION));
+    private Mono<String> extractJwtToken(ServerWebExchange exchange) {
+        ServerHttpRequest request = exchange.getRequest();
+        if (request.getMethod() == HttpMethod.GET && request.getURI().getPath().startsWith("/ws/")) {
+            return Mono.justOrEmpty(BEARER_PREFIX + request.getQueryParams().getFirst("token"));
+        } else {
+            return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+        }
     }
 }
