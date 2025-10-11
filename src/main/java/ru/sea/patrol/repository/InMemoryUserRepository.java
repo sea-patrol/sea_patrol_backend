@@ -28,8 +28,19 @@ public class InMemoryUserRepository implements UserRepository {
     @PostConstruct
     public void init() {
         UserEntity userEntity = UserEntity.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.fromString("12345678-1234-1234-1234-123456789012"))
                 .username("user1")
+                .password(passwordEncoder.encode("password"))
+                .email("email")
+                .role(UserRole.USER)
+                .locked(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        UserEntity userEntity2 = UserEntity.builder()
+                .id(UUID.fromString("12345678-1234-1234-1234-123456789013"))
+                .username("user2")
                 .password(passwordEncoder.encode("password"))
                 .email("email")
                 .role(UserRole.USER)
@@ -40,6 +51,8 @@ public class InMemoryUserRepository implements UserRepository {
 
         usersWithIdKey.put(userEntity.getId(), userEntity);
         usersWithNameKey.put(userEntity.getUsername(), userEntity);
+        usersWithIdKey.put(userEntity2.getId(), userEntity2);
+        usersWithNameKey.put(userEntity2.getUsername(), userEntity2);
     }
 
     @Override
