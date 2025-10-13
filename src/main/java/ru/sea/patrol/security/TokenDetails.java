@@ -13,7 +13,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TokenDetails {
-    private UUID userId;
+
+    private String username;
     private String token;
     private Date issuedAt;
     private Date expiresAt;

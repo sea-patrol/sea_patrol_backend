@@ -14,7 +14,6 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AuthResponseDto {
 
-    private UUID userId;
     private String username;
     private String token;
     private Date issuedAt;

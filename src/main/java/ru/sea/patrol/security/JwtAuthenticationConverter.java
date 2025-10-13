@@ -1,20 +1,26 @@
 package ru.sea.patrol.security;
 
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
+import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.function.Function;
 
+@Component
 @RequiredArgsConstructor
-public class BearerTokenServerAuthenticationConverter implements ServerAuthenticationConverter {
+public class JwtAuthenticationConverter implements ServerAuthenticationConverter {
 
-    private final JwtHandler jwtHandler;
+    private final JwtUtil jwtService;
     private static final String BEARER_PREFIX = "Bearer ";
     private static final Function<String, Mono<String>> getBearerValue = authValue -> Mono.justOrEmpty(authValue.substring(BEARER_PREFIX.length()));
 
@@ -22,8 +28,8 @@ public class BearerTokenServerAuthenticationConverter implements ServerAuthentic
     public Mono<Authentication> convert(ServerWebExchange exchange) {
         return extractJwtToken(exchange)
                 .flatMap(getBearerValue)
-                .flatMap(jwtHandler::check)
-                .flatMap(UserAuthenticationBearer::create);
+                .flatMap(jwtService::check)
+                .flatMap(this::create);
     }
 
     private Mono<String> extractJwtToken(ServerWebExchange exchange) {
@@ -33,5 +39,16 @@ public class BearerTokenServerAuthenticationConverter implements ServerAuthentic
         } else {
             return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
         }
+    }
+
+    public Mono<Authentication> create(TokenVerificationResult verificationResult) {
+        Claims claims = verificationResult.getClaims();
+        String subject = claims.getSubject();
+
+        String role = claims.get("role", String.class);
+
+        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
+
+        return Mono.justOrEmpty(new UsernamePasswordAuthenticationToken(subject, null, authorities));
     }
 }

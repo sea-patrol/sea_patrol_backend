@@ -1,26 +1,26 @@
 package ru.sea.patrol.config;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.server.ServerWebExchange;
-import ru.sea.patrol.security.AuthenticationManager;
-import ru.sea.patrol.security.BearerTokenServerAuthenticationConverter;
-import ru.sea.patrol.security.JwtHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.security.JwtAuthenticationConverter;
+import ru.sea.patrol.security.ReactiveSecurityManager;
 
 import java.util.List;
 
@@ -28,6 +28,7 @@ import java.util.List;
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
+@RequiredArgsConstructor
 public class WebSecurityConfig {
 
     @Value("${jwt.secret}")
@@ -35,8 +36,11 @@ public class WebSecurityConfig {
 
     private final String [] publicRoutes = {"/", "/assets/**", "/**.svg", "/**.glb", "/api/v1/auth/signup", "/api/v1/auth/login"};
 
+    private final ReactiveSecurityManager securityManager;
+    private final JwtAuthenticationConverter bearerTokenServerAuthenticationConverter;
+
     @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, AuthenticationManager authenticationManager) {
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .cors(cors -> cors.configurationSource(request -> {
@@ -57,7 +61,9 @@ public class WebSecurityConfig {
                         .authenticationEntryPoint(this::handleAuthenticationError) // Обработка ошибок аутентификации
                         .accessDeniedHandler(this::handleAccessDeniedError) // Обработка ошибок доступа
                 )
-                .addFilterAt(bearerAuthenticationFilter(authenticationManager), SecurityWebFiltersOrder.AUTHENTICATION)
+                .addFilterAt(
+                        bearerAuthenticationFilter(securityManager, bearerTokenServerAuthenticationConverter),
+                        SecurityWebFiltersOrder.AUTHENTICATION)
                 .build();
     }
 
@@ -73,9 +79,11 @@ public class WebSecurityConfig {
         return exchange.getResponse().setComplete();
     }
 
-    private AuthenticationWebFilter bearerAuthenticationFilter(AuthenticationManager authenticationManager) {
-        AuthenticationWebFilter bearerAuthenticationFilter = new AuthenticationWebFilter(authenticationManager);
-        bearerAuthenticationFilter.setServerAuthenticationConverter(new BearerTokenServerAuthenticationConverter(new JwtHandler(secret)));
+    private AuthenticationWebFilter bearerAuthenticationFilter(
+            ReactiveSecurityManager securityManager,
+           JwtAuthenticationConverter bearerTokenServerAuthenticationConverter) {
+        AuthenticationWebFilter bearerAuthenticationFilter = new AuthenticationWebFilter(securityManager);
+        bearerAuthenticationFilter.setServerAuthenticationConverter(bearerTokenServerAuthenticationConverter);
         bearerAuthenticationFilter.setRequiresAuthenticationMatcher(ServerWebExchangeMatchers.pathMatchers("/**"));
 
         return bearerAuthenticationFilter;
