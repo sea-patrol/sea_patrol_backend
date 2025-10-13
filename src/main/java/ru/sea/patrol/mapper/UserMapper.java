@@ -9,12 +9,13 @@ import ru.sea.patrol.dto.UserRegistrationDto;
 import ru.sea.patrol.entity.UserEntity;
 import org.mapstruct.InheritInverseConfiguration;
 import org.mapstruct.Mapper;
+import ru.sea.patrol.security.CustomPasswordEncoder;
 
 @Mapper(componentModel = "spring")
 public abstract class UserMapper {
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private CustomPasswordEncoder passwordEncoder;
 
     public abstract UserDto map(UserEntity entity);
 
