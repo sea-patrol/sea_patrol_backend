@@ -1,4 +1,4 @@
-package ru.sea.patrol.dto;
+package ru.sea.patrol.dto.auth;
 
 import lombok.Data;
 

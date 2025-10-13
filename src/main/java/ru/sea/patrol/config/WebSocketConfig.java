@@ -6,7 +6,7 @@ import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
-import ru.sea.patrol.handler.ChatHandler;
+import ru.sea.patrol.handler.GameWebSocketHandler;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,9 +15,9 @@ import java.util.Map;
 public class WebSocketConfig {
 
   @Bean
-  public HandlerMapping handlerMapping(ChatHandler chatHandler) {
+  public HandlerMapping handlerMapping(GameWebSocketHandler chatHandler) {
     Map<String, WebSocketHandler> map = new HashMap<>();
-    map.put("/ws/chat", chatHandler);
+    map.put("/ws/game", chatHandler);
 
     SimpleUrlHandlerMapping mapping = new SimpleUrlHandlerMapping();
     mapping.setUrlMap(map);

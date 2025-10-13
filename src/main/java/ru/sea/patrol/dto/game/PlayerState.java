@@ -1,4 +1,4 @@
-package ru.sea.patrol.dto;
+package ru.sea.patrol.dto.game;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,8 +9,11 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserRegistrationDto {
-    private String username;
-    private String password;
-    private String email;
+public class PlayerState {
+
+  private String username;
+  private String color;
+  private double x;
+  private double y;
+
 }
