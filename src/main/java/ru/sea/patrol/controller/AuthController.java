@@ -3,10 +3,10 @@ package ru.sea.patrol.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.dto.AuthRequestDto;
-import ru.sea.patrol.dto.AuthResponseDto;
-import ru.sea.patrol.dto.UserDto;
-import ru.sea.patrol.dto.UserRegistrationDto;
+import ru.sea.patrol.dto.auth.AuthRequestDto;
+import ru.sea.patrol.dto.auth.AuthResponseDto;
+import ru.sea.patrol.dto.auth.UserDto;
+import ru.sea.patrol.dto.auth.UserRegistrationDto;
 import ru.sea.patrol.security.ReactiveSecurityManager;
 import ru.sea.patrol.service.UserService;
 
