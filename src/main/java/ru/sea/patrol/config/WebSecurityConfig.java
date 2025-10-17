@@ -34,7 +34,10 @@ public class WebSecurityConfig {
     @Value("${jwt.secret}")
     private String secret;
 
-    private final String [] publicRoutes = {"/", "/assets/**", "/**.svg", "/**.glb", "/api/v1/auth/signup", "/api/v1/auth/login"};
+    private final String [] publicRoutes = {
+            "/", "/assets/**", "/**.svg", "/**.glb",
+            "/api/v1/auth/signup", "/api/v1/auth/login",
+            "/sw.js", "/registerSW.js", "/manifest.webmanifest", "/workbox**"};
 
     private final ReactiveSecurityManager securityManager;
     private final JwtAuthenticationConverter bearerTokenServerAuthenticationConverter;
@@ -45,7 +48,7 @@ public class WebSecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .cors(cors -> cors.configurationSource(request -> {
                     var config = new CorsConfiguration();
-                    config.setAllowedOrigins(List.of("http://localhost:5173")); // Разрешаем только этот домен
+                    config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:4173")); // Разрешаем только этот домен
                     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                     config.setAllowedHeaders(List.of("*"));
                     config.setAllowCredentials(true); // Если нужно передавать cookies
