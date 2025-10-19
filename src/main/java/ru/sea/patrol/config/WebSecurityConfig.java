@@ -35,7 +35,7 @@ public class WebSecurityConfig {
     private String secret;
 
     private final String [] publicRoutes = {
-            "/", "/assets/**", "/**.svg", "/**.glb",
+            "/", "/game", "/assets/**", "/**.html","/**.svg", "/**.glb",
             "/api/v1/auth/signup", "/api/v1/auth/login",
             "/sw.js", "/registerSW.js", "/manifest.webmanifest", "/workbox**"};
 
