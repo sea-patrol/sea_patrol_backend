@@ -1,4 +1,4 @@
-package ru.sea.patrol.service;
+package ru.sea.patrol.service.chat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +12,6 @@ import ru.sea.patrol.dto.chat.ChatMessage;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -25,77 +24,78 @@ public class ChatService {
   // Топики: "global", "group:123", "user:alice"
   private final Map<String, Sinks.Many<ChatMessage>> topicSinks = new ConcurrentHashMap<>();
 
-  // userId -> Set<groupId>
-  private final Map<String, Set<String>> userGroups = new ConcurrentHashMap<>();
+  private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
 
-  // userId -> активные подписки
-  private final Map<String, List<Disposable>> userSubscriptions = new ConcurrentHashMap<>();
-
-  // userId -> агрегирующий sink
-  private final Map<String, Sinks.Many<ChatMessage>> userSinks = new ConcurrentHashMap<>();
+  public void addUser(String userName) {
+    users.putIfAbsent(userName, new ChatUser(userName));
+  }
 
   public Flux<ChatMessage> getMessagesForUser(String userName) {
-    Sinks.Many<ChatMessage> userSink = userSinks.computeIfAbsent(userName,
-        k -> Sinks.many().unicast().onBackpressureBuffer());
+    ChatUser user = users.computeIfAbsent(userName, k -> new ChatUser(userName));
 
     subscribeUserToBaseTopics(userName);
 
-    return userSink.asFlux().doOnCancel(() -> cleanupUser(userName));
+    return user.getUserSink().asFlux().doOnCancel(() -> cleanupUser(userName));
   }
 
   private void subscribeUserToBaseTopics(String username) {
-    cleanupSubscriptions(username);
+    var user = users.get(username);
+    if (user == null) return;
+
+    user.cleanupSubscriptions();
 
     List<Disposable> subs = new CopyOnWriteArrayList<>();
     addSubscription(subs, "global", username);
     addSubscription(subs, "user:" + username, username);
 
-    userGroups.getOrDefault(username, Set.of())
+    user.getUserGroups()
         .forEach(groupId -> addSubscription(subs, "group:" + groupId, username));
 
-    userSubscriptions.put(username, subs);
+    user.getUserSubscriptions().addAll(subs);
   }
 
   private void addSubscription(List<Disposable> list, String topic, String username) {
-    Disposable sub = getOrCreateSink(topic)
+    Disposable sub = getOrCreateTopicSink(topic)
         .asFlux()
         .subscribe(msg -> relayToUser(username, msg));
     list.add(sub);
   }
 
+  private Sinks.Many<ChatMessage> getOrCreateTopicSink(String topic) {
+    return topicSinks.computeIfAbsent(topic,
+            k -> Sinks.many().replay().limit(10));
+  }
+
   private void relayToUser(String username, ChatMessage msg) {
-    Sinks.Many<ChatMessage> sink = userSinks.get(username);
+    Sinks.Many<ChatMessage> sink = users.get(username).getUserSink();
     if (sink != null) {
       sink.tryEmitNext(msg);
     }
   }
 
-  private Sinks.Many<ChatMessage> getOrCreateSink(String topic) {
-    return topicSinks.computeIfAbsent(topic,
-        k -> Sinks.many().replay().limit(10));
+  private void cleanupUser(String username) {
+    var user = users.remove(username);
+    if (user != null) {
+      user.destroy();
+    }
   }
 
-  private void cleanupSubscriptions(String userId) {
-    List<Disposable> subs = userSubscriptions.remove(userId);
-    if (subs != null)
-      subs.forEach(Disposable::dispose);
+  public void addUserToGroup(String username, String groupId) {
+    var user = users.get(username);
+    if (user != null) {
+      user.getUserGroups().add(groupId);
+    }
+    subscribeUserToBaseTopics(username);
   }
 
-  private void cleanupUser(String userId) {
-    cleanupSubscriptions(userId);
-    userSinks.remove(userId);
-  }
-
-  public void addUserToGroup(String userId, String groupId) {
-    userGroups.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(groupId);
-    subscribeUserToBaseTopics(userId);
-  }
-
-  public void removeUserFromGroup(String userId, String groupId) {
-    Set<String> groups = userGroups.get(userId);
-    if (groups != null)
-      groups.remove(groupId);
-    subscribeUserToBaseTopics(userId);
+  public void removeUserFromGroup(String username, String groupId) {
+    var user = users.get(username);
+    if (user != null) {
+      var groups = user.getUserGroups();
+      if (groups != null)
+        groups.remove(groupId);
+      subscribeUserToBaseTopics(username);
+    }
   }
 
   public Mono<Void> handleChatMessage(String fromUserId, JsonNode payload) {
@@ -124,7 +124,7 @@ public class ChatService {
   }
 
   private void broadcast(String topic, ChatMessage msg) {
-    Sinks.Many<ChatMessage> sink = getOrCreateSink(topic);
+    Sinks.Many<ChatMessage> sink = getOrCreateTopicSink(topic);
     sink.tryEmitNext(msg);
   }
 }

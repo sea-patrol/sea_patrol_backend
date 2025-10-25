@@ -14,7 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.dto.chat.ChatMessage;
 import ru.sea.patrol.dto.chat.GameMessageInput;
-import ru.sea.patrol.service.ChatService;
+import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.GameService;
 
 @Slf4j
@@ -38,6 +38,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                     );
 
                     // 1. Поток чата
+                    chatService.addUser(username);
                     Flux<WebSocketMessage> chatFlux = chatService.getMessagesForUser(username)
                             .map(msg -> createWebSocketMessage("chat/message", msg, session));
 
