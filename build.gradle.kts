@@ -33,6 +33,14 @@ dependencies {
 	implementation("io.jsonwebtoken:jjwt:0.9.1")
 	implementation("javax.xml.bind:jaxb-api:2.3.1")
 
+	// LibGDX Core (вектора, коллекции, утилиты)
+	implementation("com.badlogicgames.gdx:gdx:1.12.1")
+	// Box2D Physics (с нативными библиотеками для desktop-ОС)
+	implementation("com.badlogicgames.gdx:gdx-box2d:1.12.1")
+	runtimeOnly("com.badlogicgames.gdx:gdx-box2d-platform:1.12.1:natives-desktop")
+	// gdx-ai (ИИ: steering behaviors, pathfinding и т.д.)
+	implementation("com.badlogicgames.gdx:gdx-ai:1.8.2")
+
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
