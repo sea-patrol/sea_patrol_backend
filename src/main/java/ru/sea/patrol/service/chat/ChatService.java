@@ -120,6 +120,7 @@ public class ChatService implements MessageService {
     if (user != null) {
       user.cleanupSubscriptions();
       userLeaveChatMessage(user);
+      log.info("Player {} left chat", username);
     }
   }
 
