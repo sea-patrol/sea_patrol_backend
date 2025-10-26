@@ -12,6 +12,7 @@ import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.MessageType;
 import ru.sea.patrol.dto.chat.ChatMessage;
 import ru.sea.patrol.dto.chat.GameMessageInput;
 import ru.sea.patrol.service.chat.ChatService;
@@ -38,9 +39,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                     );
 
                     // 1. Поток чата
-                    chatService.addUser(username);
-                    Flux<WebSocketMessage> chatFlux = chatService.getMessagesForUser(username)
-                            .map(msg -> createWebSocketMessage("chat/message", msg, session));
+                    Flux<WebSocketMessage> chatFlux = chatService.initialize(username, session);
 
                     // 2. Поток позиций (все игроки!)
                     Flux<WebSocketMessage> stateFlux = gameService.getStateUpdates()
@@ -58,23 +57,11 @@ public class GameWebSocketHandler implements WebSocketHandler {
                             .map(this::parseMessage);
 
                     Mono<Void> input = inbound
-                            .flatMap(msg -> {
-                                switch (msg.getType()) {
-                                    case "chat/message":
-                                        return chatService.handleChatMessage(username, msg.getPayload());
-                                    case "chat/join":
-                                        String groupId = msg.getPayload().asText();
-                                        chatService.addUserToGroup(username, groupId);
-                                        return Mono.empty();
-                                    case "chat/leave":
-                                        String gid = msg.getPayload().asText();
-                                        chatService.removeUserFromGroup(username, gid);
-                                        return Mono.empty();
-                                    case "game/input":
-                                        return gameService.handlePlayerInput(username, msg.getPayload());
-                                    default:
-                                        return Mono.empty();
-                                }
+                            .flatMap(msg -> switch (msg.getType()) {
+                                case MessageType.CHAT_MESSAGE, MessageType.CHAT_JOIN, MessageType.CHAT_LEAVE ->
+                                        chatService.handle(username, msg);
+                                case MessageType.GAME_INPUT ->
+                                        gameService.handlePlayerInput(username, msg.getPayload());
                             })
                             .onErrorContinue((ex, obj) -> {
                                 // Логируем ошибку, но не рвём соединение
@@ -105,7 +92,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                 throw new IllegalArgumentException("Expected [type, payload]");
             }
             GameMessageInput msg = new GameMessageInput();
-            msg.setType(node.get(0).asText());
+            msg.setType(MessageType.valueOf(node.get(0).asText()));
             msg.setPayload(node.get(1));
             return msg;
         } catch (Exception e) {

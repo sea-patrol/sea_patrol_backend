@@ -5,12 +5,13 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ru.sea.patrol.MessageType;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class GameMessageInput {
-  private String type;
+  private MessageType type;
   private JsonNode payload;
 }
