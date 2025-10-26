@@ -35,6 +35,7 @@ public class ChatService implements MessageService {
     var user = addUser(username);
     userJoinChatMessage(user);
     addUserToBaseGroup(user);
+    log.info("Player {} joined chat", username);
     return user.getUserSink().asFlux()
             .map(msg -> createWebSocketMessage(MessageType.CHAT_MESSAGE.name(), msg, session, objectMapper))
             .doOnCancel(() -> cleanupUser(username));
