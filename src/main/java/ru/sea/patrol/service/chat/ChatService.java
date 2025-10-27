@@ -26,7 +26,7 @@ public class ChatService implements MessageService {
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   // Groups: "global", "group:123", "user:alice"
-  private final Map<String, Sinks.Many<ChatMessage>> groupSinks = new ConcurrentHashMap<>();
+  private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();
 
   private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
 
@@ -34,7 +34,7 @@ public class ChatService implements MessageService {
   public Flux<WebSocketMessage> initialize(String username, WebSocketSession session) {
     var user = addUser(username);
     userJoinChatMessage(user);
-    addUserToBaseGroup(user);
+    addUserToBaseGroups(user);
     log.info("Player {} joined chat", username);
     return user.getUserSink().asFlux()
             .map(msg -> createWebSocketMessage(MessageType.CHAT_MESSAGE.name(), msg, session, objectMapper))
@@ -49,9 +49,10 @@ public class ChatService implements MessageService {
   }
 
   public void leaveFromGroup(String username, String groupName) {
-    var user = users.get(username);
-    if (user != null) {
-      user.removeSubscription(groupName);
+    var group = groups.get(groupName);
+    if (group != null) {
+      group.left(username);
+      removeGroupIfEmpty(group);
     }
   }
 
@@ -101,44 +102,56 @@ public class ChatService implements MessageService {
       return users.computeIfAbsent(userName, k -> new ChatUser(userName));
   }
 
-  private void addUserToBaseGroup(ChatUser user) {
+  private void addUserToBaseGroups(ChatUser user) {
     addToGroup( GLOBAL_CHAT_GROUP, user);
-    addToGroup( "user:" + user.getUserName(), user);
+    addToGroup( "user:" + user.getName(), user);
   }
 
   private void addToGroup(String groupName, ChatUser user) {
-    var groupSync = getOrCreateGroupSink(groupName);
-    user.addSubscription(groupName, groupSync);
+    var group = getOrCreateGroup(groupName);
+    group.join(user);
   }
 
-  private Sinks.Many<ChatMessage> getOrCreateGroupSink(String topic) {
-    return groupSinks.computeIfAbsent(topic,
-            k -> Sinks.many().replay().limit(10));
+  private ChatGroup getOrCreateGroup(String groupName) {
+    return groups.computeIfAbsent(groupName, ChatGroup::new);
   }
 
   private void cleanupUser(String username) {
     var user = users.remove(username);
     if (user != null) {
-      user.cleanupSubscriptions();
+      var userGroupNames = user.cleanupSubscriptions();
+      for (String groupName : userGroupNames) {
+        var group = groups.get(groupName);
+        if (group != null) {
+          group.left(username);
+          removeGroupIfEmpty(group);
+        }
+      }
       userLeaveChatMessage(user);
       log.info("Player {} left chat", username);
     }
   }
 
-  private void broadcast(String group, ChatMessage msg) {
-    Sinks.Many<ChatMessage> sink = getOrCreateGroupSink(group);
-    sink.tryEmitNext(msg);
+  private void broadcast(String groupName, ChatMessage msg) {
+    var group = getOrCreateGroup(groupName);
+    group.send(msg);
   }
 
   private void userJoinChatMessage(ChatUser user) {
     if (user != null) {
-      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getUserName() + " joined the chat"));
+      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " joined the chat"));
     }
   }
 
   private void userLeaveChatMessage(ChatUser user) {
     if (user != null) {
-      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getUserName() + " left the chat"));
+      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " left the chat"));
+    }
+  }
+
+  private void removeGroupIfEmpty(ChatGroup group) {
+    if (group != null && group.isEmpty()) {
+      groups.remove(group.getName());
     }
   }
 }

@@ -5,21 +5,23 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Sinks;
 import ru.sea.patrol.dto.chat.ChatMessage;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Getter
 public class ChatUser {
 
-    private final String userName;
+    private final String name;
 
     private final Sinks.Many<ChatMessage> userSink = Sinks.many().unicast().onBackpressureBuffer();
 
-    // topic -> subscription
+    // groupName -> subscription
     private final Map<String, Disposable> userSubscriptions = new ConcurrentHashMap<>();
 
-    public ChatUser(String userName) {
-        this.userName = userName;
+    public ChatUser(String name) {
+        this.name = name;
     }
 
     public void reply(ChatMessage message) {
@@ -40,8 +42,10 @@ public class ChatUser {
         }
     }
 
-    public void cleanupSubscriptions() {
+    public Set<String> cleanupSubscriptions() {
+        var groupNames = new HashSet<>(userSubscriptions.keySet());
         userSubscriptions.values().forEach(Disposable::dispose);
         userSubscriptions.clear();
+        return groupNames;
     }
 }
