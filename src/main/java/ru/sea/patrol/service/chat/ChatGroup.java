@@ -2,7 +2,7 @@ package ru.sea.patrol.service.chat;
 
 import lombok.Getter;
 import reactor.core.publisher.Sinks;
-import ru.sea.patrol.dto.chat.ChatMessage;
+import ru.sea.patrol.dto.websocket.ChatMessage;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

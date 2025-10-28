@@ -8,10 +8,9 @@ import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
 import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.chat.ChatMessage;
-import ru.sea.patrol.dto.chat.GameMessageInput;
+import ru.sea.patrol.dto.websocket.ChatMessage;
+import ru.sea.patrol.dto.websocket.MessageInput;
 import ru.sea.patrol.service.MessageService;
 
 import java.util.Map;
@@ -56,7 +55,7 @@ public class ChatService implements MessageService {
     }
   }
 
-  public Mono<Void> handle(String username, GameMessageInput msg) {
+  public Mono<Void> handle(String username, MessageInput msg) {
     switch (msg.getType()) {
       case MessageType.CHAT_MESSAGE:
         return handleChatMessage(username, msg.getPayload());

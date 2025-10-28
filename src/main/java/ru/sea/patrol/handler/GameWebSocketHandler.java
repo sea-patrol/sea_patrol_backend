@@ -2,7 +2,6 @@ package ru.sea.patrol.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -13,8 +12,7 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.chat.ChatMessage;
-import ru.sea.patrol.dto.chat.GameMessageInput;
+import ru.sea.patrol.dto.websocket.MessageInput;
 import ru.sea.patrol.service.chat.ChatService;
 
 @Slf4j
@@ -39,7 +37,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                     Flux<WebSocketMessage> outbound = Flux.merge(chatFlux);
 
                     // Входящие сообщения
-                    Flux<GameMessageInput> inbound = session.receive()
+                    Flux<MessageInput> inbound = session.receive()
                             .map(WebSocketMessage::getPayloadAsText)
                             .map(this::parseMessage);
 
@@ -66,7 +64,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                 }).then();
     }
 
-    private GameMessageInput parseMessage(String json) {
+    private MessageInput parseMessage(String json) {
         if (json == null || json.trim().isEmpty()) {
             throw new IllegalArgumentException("Empty message");
         }
@@ -75,31 +73,12 @@ public class GameWebSocketHandler implements WebSocketHandler {
             if (!node.isArray() || node.size() < 2) {
                 throw new IllegalArgumentException("Expected [type, payload]");
             }
-            GameMessageInput msg = new GameMessageInput();
+            MessageInput msg = new MessageInput();
             msg.setType(MessageType.valueOf(node.get(0).asText()));
             msg.setPayload(node.get(1));
             return msg;
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid message format", e);
-        }
-    }
-
-    private String toJson(ChatMessage msg) {
-        try {
-            return objectMapper.writeValueAsString(new Object[]{"chat", msg});
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private WebSocketMessage createWebSocketMessage(String type, Object payload, WebSocketSession session) {
-        try {
-            ObjectNode node = objectMapper.createObjectNode();
-            node.put("type", type);
-            node.set("payload", objectMapper.valueToTree(payload));
-            return session.textMessage(node.toString());
-        } catch (Exception e) {
-            throw new RuntimeException("Serialization error", e);
         }
     }
 }

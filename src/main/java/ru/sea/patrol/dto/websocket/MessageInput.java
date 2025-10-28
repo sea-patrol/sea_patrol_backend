@@ -1,4 +1,4 @@
-package ru.sea.patrol.dto.chat;
+package ru.sea.patrol.dto.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
@@ -11,7 +11,7 @@ import ru.sea.patrol.MessageType;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class GameMessageInput {
+public class MessageInput {
   private MessageType type;
   private JsonNode payload;
 }
