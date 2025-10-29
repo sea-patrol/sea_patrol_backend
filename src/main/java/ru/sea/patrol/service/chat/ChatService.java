@@ -4,21 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.MessageType;
 import ru.sea.patrol.dto.websocket.ChatMessage;
 import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.service.MessageService;
+import ru.sea.patrol.dto.websocket.MessageOutput;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
-public class ChatService implements MessageService {
+public class ChatService {
 
   private static final String GLOBAL_CHAT_GROUP = "global";
 
@@ -29,15 +28,30 @@ public class ChatService implements MessageService {
 
   private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
 
-  @Override
-  public Flux<WebSocketMessage> initialize(String username, WebSocketSession session) {
+  public Flux<MessageOutput> initialize(String username) {
     var user = addUser(username);
     userJoinChatMessage(user);
     addUserToBaseGroups(user);
     log.info("Player {} joined chat", username);
     return user.getUserSink().asFlux()
-            .map(msg -> createWebSocketMessage(MessageType.CHAT_MESSAGE.name(), msg, session, objectMapper))
-            .doOnCancel(() -> cleanupUser(username));
+            .map(msg -> new MessageOutput(MessageType.CHAT_MESSAGE, msg));
+  }
+
+
+  public void cleanupUser(String username) {
+    var user = users.remove(username);
+    if (user != null) {
+      var userGroupNames = user.cleanupSubscriptions();
+      for (String groupName : userGroupNames) {
+        var group = groups.get(groupName);
+        if (group != null) {
+          group.left(username);
+          removeGroupIfEmpty(group);
+        }
+      }
+      userLeaveChatMessage(user);
+      log.info("Player {} left chat", username);
+    }
   }
 
   public void joinToGroup(String username, String groupName) {
@@ -113,22 +127,6 @@ public class ChatService implements MessageService {
 
   private ChatGroup getOrCreateGroup(String groupName) {
     return groups.computeIfAbsent(groupName, ChatGroup::new);
-  }
-
-  private void cleanupUser(String username) {
-    var user = users.remove(username);
-    if (user != null) {
-      var userGroupNames = user.cleanupSubscriptions();
-      for (String groupName : userGroupNames) {
-        var group = groups.get(groupName);
-        if (group != null) {
-          group.left(username);
-          removeGroupIfEmpty(group);
-        }
-      }
-      userLeaveChatMessage(user);
-      log.info("Player {} left chat", username);
-    }
   }
 
   private void broadcast(String groupName, ChatMessage msg) {
