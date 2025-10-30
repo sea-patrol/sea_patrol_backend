@@ -1,5 +1,6 @@
 package ru.sea.patrol.service.game;
 
+import com.badlogic.gdx.physics.box2d.World;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -29,6 +30,8 @@ public class Player {
   private final String name;
   private final Sinks.Many<MessageOutput> sink;
 
+  private PlayerShipInstance ship;
+
   public Player(String name) {
     this.name = name;
     this.sink = Sinks.many().unicast().onBackpressureBuffer();
@@ -46,6 +49,15 @@ public class Player {
     }
     this.room = room;
     roomSubscription = room.getSink().asFlux().subscribe(this::reply);
+    if (this.room != null
+        && this.room.isStarted()
+        && this.room.getWorld() != null) {
+      createShipInstanceInGameWorld(this.room.getWorld());
+    }
+  }
+
+  public void createShipInstanceInGameWorld(World world) {
+    this.ship = new PlayerShipInstance(world, this);
   }
 
   public void leaveRoom() {
@@ -53,6 +65,10 @@ public class Player {
     if (this.roomSubscription != null) {
       this.roomSubscription.dispose();
       this.roomSubscription = null;
+    }
+    if (this.ship != null) {
+      this.ship.dispose();
+      this.ship = null;
     }
   }
 }
