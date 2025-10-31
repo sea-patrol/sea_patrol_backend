@@ -39,6 +39,8 @@ public class GameWebSocketHandler implements WebSocketHandler {
                   // 2. Поток игры
                   Flux<WebSocketMessage> gameFlux = gameService.initialize(username)
                           .map(message -> createWebSocketMessage(message, session, objectMapper));
+                  gameService.joinRoom(username, "main");
+                  gameService.startRoom("main");
 
                   // 3. Объединяем потоки
                   Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux);
@@ -52,6 +54,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
                           .flatMap(msg -> switch (msg.getType()) {
                               case MessageType.CHAT_MESSAGE, MessageType.CHAT_JOIN, MessageType.CHAT_LEAVE ->
                                       chatService.handle(username, msg);
+                              case MessageType.PLAYER_INPUT -> gameService.handle(username, msg);
                               default -> Mono.empty();
                           })
                           .onErrorContinue((ex, obj) -> {

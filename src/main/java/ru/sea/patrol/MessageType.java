@@ -6,7 +6,7 @@ public enum MessageType {
     CHAT_JOIN,
     CHAT_LEAVE,
     PLAYER_INPUT,
-    PLAYER_UPDATE,
+    PLAYER_JOIN,
     PLAYER_LEAVE,
     INIT_GAME_STATE,
     UPDATE_GAME_STATE;

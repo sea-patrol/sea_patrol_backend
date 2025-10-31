@@ -6,16 +6,10 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
 import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.InitGameStateMessage;
-import ru.sea.patrol.dto.websocket.MessageOutput;
-import ru.sea.patrol.dto.websocket.PlayerInfo;
-import ru.sea.patrol.dto.websocket.WindInfo;
+import ru.sea.patrol.dto.websocket.*;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,6 +31,7 @@ public class GameRoom {
   private float delta;
 
   private ScheduledExecutorService scheduler;
+  private ScheduledFuture<?> scheduledFuture;
 
   @Getter
   private volatile boolean started = false;
@@ -49,14 +44,22 @@ public class GameRoom {
   }
 
   public void join(Player player) {
+    log.info("Player {} joining room {}", player.getName(), name);
     players.put(player.getName(), player);
     player.joinRoom(this);
+    if (started) {
+      sendPlayerJoinMessage(player);
+    }
   }
 
   public void leave(String playerName) {
+    log.info("Player {} leaving room {}", playerName, name);
     var player = players.remove(playerName);
     if (player != null) {
       player.leaveRoom();
+      if (started) {
+        sendPlayerLeaveMessage(player);
+      }
     }
   }
 
@@ -65,6 +68,7 @@ public class GameRoom {
   }
 
   public void start() {
+    log.info("Starting room game {}", name);
     if (started) {
       return;
     }
@@ -79,10 +83,11 @@ public class GameRoom {
 
     started = true;
 
-    scheduler = Executors.newSingleThreadScheduledExecutor();
-    scheduler.scheduleAtFixedRate(this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
-
     sendStartMessage();
+
+    scheduler = Executors.newSingleThreadScheduledExecutor();
+    scheduledFuture = scheduler.scheduleWithFixedDelay(
+            this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
   }
 
   public void update() {
@@ -91,15 +96,23 @@ public class GameRoom {
     wind.update(delta);
 
     // Обновляем игроков
-    players.values().forEach(player -> player.getShip().update(delta, wind));
+    players.values().forEach(player -> {
+      if (player.getShip() != null) {
+        player.getShip().update(delta, wind);
+      }
+    });
 
     // Шаг физики
     world.step(delta, 6, 2);
 
-    log.info("Delta: {}", delta);
+    sendUpdateMessage();
   }
 
   public void stop() {
+    log.info("Stopping room game {}", name);
+    if (scheduledFuture != null && !scheduledFuture.isCancelled()) {
+      scheduledFuture.cancel(false);
+    }
     if (scheduler != null) {
       scheduler.shutdownNow();
       scheduler = null;
@@ -124,6 +137,7 @@ public class GameRoom {
 
   private void sendStartMessage() {
     var startMessage = new MessageOutput(MessageType.INIT_GAME_STATE, new InitGameStateMessage(
+            name,
             new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
             players.values().stream().map(player -> new PlayerInfo(
                     player.getName(),
@@ -141,9 +155,47 @@ public class GameRoom {
     ));
 
     sink.tryEmitNext(startMessage);
+    log.info("Room game {} sent start message", name);
   }
 
   private void sendUpdateMessage() {
+    var updateMessage = new MessageOutput(MessageType.UPDATE_GAME_STATE, new UpdateGameStateMessage(
+            delta,
+            new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+            players.values().stream().map(player -> new PlayerUpdateInfo(
+                    player.getName(),
+                    player.getHealth(),
+                    player.getShip().getVelocity(),
+                    player.getShip().getPosition().x,
+                    player.getShip().getPosition().y,
+                    player.getShip().getOrientation())
+            ).collect(Collectors.toList())
+    ));
 
+    sink.tryEmitNext(updateMessage);
+    log.info("Room game {} sent update message", name);
+  }
+
+  private void sendPlayerJoinMessage(Player player) {
+    var joinMessage = new MessageOutput(MessageType.PLAYER_JOIN, new PlayerInfo(
+            player.getName(),
+            player.getHealth(),
+            player.getMaxHealth(),
+            player.getShip().getVelocity(),
+            player.getShip().getPosition().x,
+            player.getShip().getPosition().y,
+            player.getShip().getOrientation(),
+            player.getModel(),
+            player.getHeight(),
+            player.getWidth(),
+            player.getLength()));
+    sink.tryEmitNext(joinMessage);
+    log.info("Player {} joined in the room game {}", player.getName(), name);
+  }
+
+  private void sendPlayerLeaveMessage(Player player) {
+    var leaveMessage = new MessageOutput(MessageType.PLAYER_LEAVE, player.getName());
+    sink.tryEmitNext(leaveMessage);
+    log.info("Player {} left the room game {}", player.getName(), name);
   }
 }

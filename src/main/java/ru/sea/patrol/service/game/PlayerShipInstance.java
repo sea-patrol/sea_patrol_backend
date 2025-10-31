@@ -36,7 +36,12 @@ public class PlayerShipInstance {
   }
 
   public void update(float delta, Wind wind) {
+    if (input == null) {
+      return;
+    }
+
     float thrust = 0;
+
     if (input.up()) {
       thrust += 1;
     }

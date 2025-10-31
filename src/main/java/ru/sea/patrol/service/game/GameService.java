@@ -1,9 +1,15 @@
 package ru.sea.patrol.service.game;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import ru.sea.patrol.MessageType;
+import ru.sea.patrol.dto.websocket.MessageInput;
 import ru.sea.patrol.dto.websocket.MessageOutput;
+import ru.sea.patrol.dto.websocket.PlayerInputMessage;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,12 +18,36 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class GameService {
 
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   private final Map<String, Player> players = new ConcurrentHashMap<>();
   private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
 
   public Flux<MessageOutput> initialize(String playerName) {
     var player = retrievePlayer(playerName);
     return player.getSink().asFlux();
+  }
+
+  public Mono<Void> handle(String username, MessageInput msg) {
+    switch (msg.getType()) {
+      case MessageType.PLAYER_INPUT:
+        return handlePlayerInput(username, msg.getPayload());
+      default:
+        return Mono.empty();
+    }
+  }
+
+  private Mono<Void> handlePlayerInput(String username, JsonNode payload) {
+    try {
+      PlayerInputMessage msg = objectMapper.treeToValue(payload, PlayerInputMessage.class);
+      var player = players.get(username);
+      if (player != null && player.getShip() != null) {
+        player.getShip().setInput(msg);
+      }
+      return Mono.empty();
+    } catch (Exception e) {
+      return Mono.error(e);
+    }
   }
 
   public void startRoom(String roomName) {
@@ -44,7 +74,11 @@ public class GameService {
   }
 
   public void cleanupPlayer(String playerName) {
-    var user = players.remove(playerName);
+    log.info("Cleaning up player {}", playerName);
+    var player = players.remove(playerName);
+    if (player != null && player.getRoom() != null) {
+      leaveRoom(playerName, player.getRoom().getName());
+    }
   }
 
   private Player retrievePlayer(String playerName) {
