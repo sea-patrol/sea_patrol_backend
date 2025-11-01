@@ -33,6 +33,8 @@ public class PlayerShipInstance {
     body.setFixedRotation(false);
     body.setAngularDamping(0.5f);
     body.setLinearDamping(1f);
+
+    input = new PlayerInputMessage(false, false, false, false);
   }
 
   public void update(float delta, Wind wind) {

@@ -42,6 +42,7 @@ public class GameService {
       PlayerInputMessage msg = objectMapper.treeToValue(payload, PlayerInputMessage.class);
       var player = players.get(username);
       if (player != null && player.getShip() != null) {
+        log.info("Player {} input: {}", username, msg);
         player.getShip().setInput(msg);
       }
       return Mono.empty();
