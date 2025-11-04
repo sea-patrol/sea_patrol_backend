@@ -2,6 +2,7 @@ package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
@@ -14,6 +15,8 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class GameRoom {
+
+  private ObjectMapper objectMapper = new ObjectMapper();
 
   @Getter
   private final String name;
@@ -40,7 +43,7 @@ public class GameRoom {
 
   public GameRoom(String name) {
     this.name = name;
-    this.sink = Sinks.many().unicast().onBackpressureBuffer();
+    this.sink = Sinks.many().multicast().onBackpressureBuffer();
   }
 
   public void join(Player player) {
@@ -48,7 +51,8 @@ public class GameRoom {
     players.put(player.getName(), player);
     player.joinRoom(this);
     if (started) {
-      sendPlayerJoinMessage(player);
+      broadcastPlayerJoinMessage(player);
+      sendStartMessage(player);
     }
   }
 
@@ -58,7 +62,7 @@ public class GameRoom {
     if (player != null) {
       player.leaveRoom();
       if (started) {
-        sendPlayerLeaveMessage(player);
+        broadcastPlayerLeaveMessage(player);
       }
     }
   }
@@ -83,7 +87,7 @@ public class GameRoom {
 
     started = true;
 
-    sendStartMessage();
+    broadcastStartMessage();
 
     scheduler = Executors.newSingleThreadScheduledExecutor();
     scheduledFuture = scheduler.scheduleWithFixedDelay(
@@ -135,7 +139,7 @@ public class GameRoom {
     return delta;
   }
 
-  private void sendStartMessage() {
+  private void broadcastStartMessage() {
     var startMessage = new MessageOutput(MessageType.INIT_GAME_STATE, new InitGameStateMessage(
             name,
             new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
@@ -158,6 +162,29 @@ public class GameRoom {
     log.info("Room game {} sent start message", name);
   }
 
+  private void sendStartMessage(Player player) {
+    var startMessage = new MessageOutput(MessageType.INIT_GAME_STATE, new InitGameStateMessage(
+            name,
+            new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+            players.values().stream().map(p -> new PlayerInfo(
+                    p.getName(),
+                    p.getHealth(),
+                    p.getMaxHealth(),
+                    p.getShip().getVelocity(),
+                    p.getShip().getPosition().x,
+                    p.getShip().getPosition().y,
+                    p.getShip().getOrientation(),
+                    p.getModel(),
+                    p.getHeight(),
+                    p.getWidth(),
+                    p.getLength())
+            ).collect(Collectors.toList())
+    ));
+
+    player.getSink().tryEmitNext(startMessage);
+    log.info("Room game {} sent start message for player {}", name, player.getName());
+  }
+
   private void sendUpdateMessage() {
     var updateMessage = new MessageOutput(MessageType.UPDATE_GAME_STATE, new UpdateGameStateMessage(
             delta,
@@ -176,7 +203,7 @@ public class GameRoom {
     log.info("Room game {} sent update message", name);
   }
 
-  private void sendPlayerJoinMessage(Player player) {
+  private void broadcastPlayerJoinMessage(Player player) {
     var joinMessage = new MessageOutput(MessageType.PLAYER_JOIN, new PlayerInfo(
             player.getName(),
             player.getHealth(),
@@ -193,7 +220,7 @@ public class GameRoom {
     log.info("Player {} joined in the room game {}", player.getName(), name);
   }
 
-  private void sendPlayerLeaveMessage(Player player) {
+  private void broadcastPlayerLeaveMessage(Player player) {
     var leaveMessage = new MessageOutput(MessageType.PLAYER_LEAVE, player.getName());
     sink.tryEmitNext(leaveMessage);
     log.info("Player {} left the room game {}", player.getName(), name);

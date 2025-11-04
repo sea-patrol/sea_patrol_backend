@@ -8,7 +8,7 @@ public class PlayerShipInstance {
 
   private final Body body;
   private static final float MAX_SPEED = 4000f;
-  private static final float TURN_SPEED = 3000f;
+  private static final float TURN_SPEED = 100f;
 
   private PlayerInputMessage input;
 
@@ -51,14 +51,14 @@ public class PlayerShipInstance {
 
     // Простая модель: сила пропорциональна cos(угол между ветром и парусом)
     float shipAngle = body.getAngle();
-    Vector2 force = new Vector2((float) Math.sin(shipAngle), -(float) Math.cos(shipAngle))
+    Vector2 force = new Vector2((float) Math.cos(shipAngle), -(float) Math.sin(shipAngle))
             .scl(thrust * MAX_SPEED);
 
     body.applyForceToCenter(force, true);
 
     // Поворот
-    if (input.left()) body.applyTorque(-TURN_SPEED, true);
-    if (input.right()) body.applyTorque(TURN_SPEED, true);
+    if (input.left()) body.applyTorque(TURN_SPEED, true);
+    if (input.right()) body.applyTorque(-TURN_SPEED, true);
   }
 
   public Vector2 getPosition() {

@@ -12,6 +12,7 @@ import ru.sea.patrol.dto.websocket.MessageOutput;
 import ru.sea.patrol.dto.websocket.PlayerInputMessage;
 
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -19,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameService {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final Random random = new Random();
 
   private final Map<String, Player> players = new ConcurrentHashMap<>();
   private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
@@ -90,8 +92,8 @@ public class GameService {
               .setHealth(500)
               .setAngle(0)
               .setVelocity(0)
-              .setX(0)
-              .setZ(0)
+              .setX(random.nextFloat(-100, 100))
+              .setZ(random.nextFloat(-100, 100))
               .setHeight(1.5f)
               .setWidth(2f)
               .setLength(8f);
