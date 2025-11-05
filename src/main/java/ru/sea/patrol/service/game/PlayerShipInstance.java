@@ -7,8 +7,8 @@ import ru.sea.patrol.dto.websocket.PlayerInputMessage;
 public class PlayerShipInstance {
 
   private final Body body;
-  private static final float MAX_FORCE_RATIO = 10f;
-  private static final float TURN_FORCE = 1000f;
+  private static final float MAX_FORCE_RATIO = 20f;
+  private static final float TURN_FORCE = 1500f;
 
   private PlayerInputMessage input;
 

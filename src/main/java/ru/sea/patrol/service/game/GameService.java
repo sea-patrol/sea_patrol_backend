@@ -94,7 +94,7 @@ public class GameService {
               .setVelocity(0)
               .setX(random.nextFloat(-100, 100))
               .setZ(random.nextFloat(-100, 100))
-              .setHeight(1.5f)
+              .setHeight(4f)
               .setWidth(8f)
               .setLength(32f);
     });
