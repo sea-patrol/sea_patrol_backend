@@ -39,7 +39,7 @@ public class GameRoom {
   @Getter
   private volatile boolean started = false;
 
-  private long updatePeriod = 1000L;
+  private long updatePeriod = 100L;
 
   public GameRoom(String name) {
     this.name = name;
@@ -200,7 +200,6 @@ public class GameRoom {
     ));
 
     sink.tryEmitNext(updateMessage);
-    log.info("Room game {} sent update message", name);
   }
 
   private void broadcastPlayerJoinMessage(Player player) {

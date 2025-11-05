@@ -95,8 +95,8 @@ public class GameService {
               .setX(random.nextFloat(-100, 100))
               .setZ(random.nextFloat(-100, 100))
               .setHeight(1.5f)
-              .setWidth(2f)
-              .setLength(8f);
+              .setWidth(8f)
+              .setLength(32f);
     });
   }
 }
