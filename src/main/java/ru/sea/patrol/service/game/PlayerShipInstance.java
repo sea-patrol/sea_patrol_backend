@@ -22,7 +22,7 @@ public class PlayerShipInstance {
     body = world.createBody(def);
 
     PolygonShape shape = new PolygonShape();
-    shape.setAsBox(player.getWidth() / 2, player.getLength() / 2);
+    shape.setAsBox(player.getLength() / 2, player.getWidth() / 2);
     FixtureDef sensorDef = new FixtureDef();
     sensorDef.shape = shape;
     sensorDef.density = 1f;
@@ -54,7 +54,7 @@ public class PlayerShipInstance {
 
     // Простая модель: сила пропорциональна cos(угол между ветром и парусом)
     float shipAngle = body.getAngle();
-    Vector2 force = new Vector2((float) Math.cos(shipAngle), -(float) Math.sin(shipAngle))
+    Vector2 force = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
             .scl(thrust * this.force);
 
     body.applyForceToCenter(force, true);

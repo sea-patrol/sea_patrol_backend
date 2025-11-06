@@ -92,8 +92,8 @@ public class GameService {
               .setHealth(500)
               .setAngle(0)
               .setVelocity(0)
-              .setX(random.nextFloat(-100, 100))
-              .setZ(random.nextFloat(-100, 100))
+              .setX(0)
+              .setZ(0)
               .setHeight(4f)
               .setWidth(8f)
               .setLength(32f);
