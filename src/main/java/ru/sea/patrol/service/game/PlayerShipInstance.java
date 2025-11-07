@@ -7,8 +7,8 @@ import ru.sea.patrol.dto.websocket.PlayerInputMessage;
 public class PlayerShipInstance {
 
   private final Body body;
-  private static final float MAX_FORCE_RATIO = 20f;
-  private static final float TURN_FORCE = 1500f;
+  private static final float MAX_FORCE_RATIO = 30f;
+  private static final float TURN_FORCE_RATIO = 2f;
 
   private PlayerInputMessage input;
 
@@ -33,7 +33,7 @@ public class PlayerShipInstance {
     shape.dispose();
 
     body.setFixedRotation(false);
-    body.setAngularDamping(0.5f);
+    body.setAngularDamping(0.8f);
     body.setLinearDamping(0.8f);
 
     input = new PlayerInputMessage(false, false, false, false);
@@ -54,14 +54,14 @@ public class PlayerShipInstance {
 
     // Простая модель: сила пропорциональна cos(угол между ветром и парусом)
     float shipAngle = body.getAngle();
-    Vector2 force = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
+    Vector2 forceVector = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
             .scl(thrust * this.force);
 
-    body.applyForceToCenter(force, true);
+    body.applyForceToCenter(forceVector, true);
 
     // Поворот
-    if (input.left()) body.applyTorque(TURN_FORCE, true);
-    if (input.right()) body.applyTorque(-TURN_FORCE, true);
+    if (input.left()) body.applyTorque(TURN_FORCE_RATIO * force, true);
+    if (input.right()) body.applyTorque(-TURN_FORCE_RATIO * force, true);
   }
 
   public Vector2 getPosition() {
@@ -88,5 +88,13 @@ public class PlayerShipInstance {
 
   public void setInput(PlayerInputMessage input) {
     this.input = input;
+  }
+
+  public float getFrontendX() {
+    return body.getPosition().y;
+  }
+
+  public float getFrontendZ() {
+    return body.getPosition().x;
   }
 }

@@ -95,8 +95,8 @@ public class GameService {
               .setX(0)
               .setZ(0)
               .setHeight(4f)
-              .setWidth(8f)
-              .setLength(32f);
+              .setWidth(7f)
+              .setLength(26f);
     });
   }
 }

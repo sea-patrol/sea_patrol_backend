@@ -148,8 +148,8 @@ public class GameRoom {
                     player.getHealth(),
                     player.getMaxHealth(),
                     player.getShip().getVelocity(),
-                    player.getShip().getPosition().x,
-                    player.getShip().getPosition().y,
+                    player.getShip().getFrontendX(),  //inverted axis for client
+                    player.getShip().getFrontendZ(),  //inverted axis for client
                     player.getShip().getOrientation(),
                     player.getModel(),
                     player.getHeight(),
@@ -171,8 +171,8 @@ public class GameRoom {
                     p.getHealth(),
                     p.getMaxHealth(),
                     p.getShip().getVelocity(),
-                    p.getShip().getPosition().x,
-                    p.getShip().getPosition().y,
+                    p.getShip().getFrontendX(), //inverted axis for client
+                    p.getShip().getFrontendZ(),  //inverted axis for client
                     p.getShip().getOrientation(),
                     p.getModel(),
                     p.getHeight(),
@@ -193,8 +193,8 @@ public class GameRoom {
                     player.getName(),
                     player.getHealth(),
                     player.getShip().getVelocity(),
-                    player.getShip().getPosition().x,
-                    player.getShip().getPosition().y,
+                    player.getShip().getFrontendX(),  //inverted axis for client
+                    player.getShip().getFrontendZ(),  //inverted axis for client
                     player.getShip().getOrientation())
             ).collect(Collectors.toList())
     ));
@@ -208,8 +208,8 @@ public class GameRoom {
             player.getHealth(),
             player.getMaxHealth(),
             player.getShip().getVelocity(),
-            player.getShip().getPosition().x,
-            player.getShip().getPosition().y,
+            player.getShip().getFrontendX(),
+            player.getShip().getFrontendZ(),
             player.getShip().getOrientation(),
             player.getModel(),
             player.getHeight(),
