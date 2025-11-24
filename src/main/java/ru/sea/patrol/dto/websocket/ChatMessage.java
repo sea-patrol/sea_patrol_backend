@@ -1,4 +1,4 @@
-package ru.sea.patrol.dto.chat;
+package ru.sea.patrol.dto.websocket;
 
 import lombok.*;
 

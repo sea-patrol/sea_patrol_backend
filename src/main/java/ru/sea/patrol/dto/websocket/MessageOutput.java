@@ -1,19 +1,16 @@
-package ru.sea.patrol.dto.game;
+package ru.sea.patrol.dto.websocket;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ru.sea.patrol.MessageType;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class PlayerState {
-
-  private String username;
-  private String color;
-  private double x;
-  private double y;
-
+public class MessageOutput {
+  private MessageType type;
+  private Object payload;
 }

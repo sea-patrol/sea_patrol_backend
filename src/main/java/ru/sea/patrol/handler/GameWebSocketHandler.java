@@ -12,123 +12,98 @@ import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.dto.chat.ChatMessage;
-import ru.sea.patrol.dto.chat.GameMessageInput;
-import ru.sea.patrol.service.ChatService;
-import ru.sea.patrol.service.GameService;
+import ru.sea.patrol.MessageType;
+import ru.sea.patrol.dto.websocket.MessageInput;
+import ru.sea.patrol.dto.websocket.MessageOutput;
+import ru.sea.patrol.service.chat.ChatService;
+import ru.sea.patrol.service.game.GameService;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GameWebSocketHandler implements WebSocketHandler {
 
-    private final ChatService chatService;
-    private final GameService gameService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ChatService chatService;
+  private final GameService gameService;
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Override
-    public Mono<Void> handle(WebSocketSession session) {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(securityContext -> securityContext.getAuthentication().getName())
-                .flatMap(username -> {
-                    // 1. Отправляем начальный snapshot
-                    var allPlayers = gameService.initAndReturnAllPlayers(username);
-                    Mono<Void> initialSnapshot = session.send(
-                            Mono.just(createWebSocketMessage("game/players", allPlayers, session))
-                    );
+  @Override
+  public Mono<Void> handle(WebSocketSession session) {
+      return ReactiveSecurityContextHolder.getContext()
+              .map(securityContext -> securityContext.getAuthentication().getName())
+              .flatMap(username -> {
+                  // 1. Поток чата
+                  Flux<WebSocketMessage> chatFlux = chatService.initialize(username)
+                          .map(message -> createWebSocketMessage(message, session, objectMapper));
 
-                    // 1. Поток чата
-                    Flux<WebSocketMessage> chatFlux = chatService.getMessagesForUser(username)
-                            .map(msg -> createWebSocketMessage("chat/message", msg, session));
+                  // 2. Поток игры
+                  Flux<WebSocketMessage> gameFlux = gameService.initialize(username)
+                          .map(message -> createWebSocketMessage(message, session, objectMapper));
+                  gameService.joinRoom(username, "main");
+                  gameService.startRoom("main");
 
-                    // 2. Поток позиций (все игроки!)
-                    Flux<WebSocketMessage> stateFlux = gameService.getStateUpdates()
-                            .map(update -> createWebSocketMessage("game/position", update, session));
+                  // 3. Объединяем потоки
+                  Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux);
 
-                    Flux<WebSocketMessage> playerLeftFlux = gameService.getPlayerLeftEvents()
-                            .map(left -> createWebSocketMessage("game/playerLeft", left, session));
+                  // Входящие сообщения
+                  Flux<MessageInput> inbound = session.receive()
+                          .map(WebSocketMessage::getPayloadAsText)
+                          .map(this::parseMessage);
 
-                    // 3. Объединяем потоки
-                    Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, stateFlux, playerLeftFlux);
+                  Mono<Void> input = inbound
+                          .flatMap(msg -> switch (msg.getType()) {
+                              case MessageType.CHAT_MESSAGE, MessageType.CHAT_JOIN, MessageType.CHAT_LEAVE ->
+                                      chatService.handle(username, msg);
+                              case MessageType.PLAYER_INPUT -> gameService.handle(username, msg);
+                              default -> Mono.empty();
+                          })
+                          .onErrorContinue((ex, obj) -> {
+                              // Логируем ошибку, но не рвём соединение
+                              log.error("Error processing: " + obj + " | " + ex.getMessage());
+                          })
+                          .then();
 
-                    // Входящие сообщения
-                    Flux<GameMessageInput> inbound = session.receive()
-                            .map(WebSocketMessage::getPayloadAsText)
-                            .map(this::parseMessage);
+                  // При завершении сессии (отключение клиента)
+                  Mono<Void> cleanup = Mono.fromRunnable(() -> {
+                    chatService.cleanupUser(username);
+                    gameService.cleanupPlayer(username);
+                    log.info("Player {} disconnected", username);
+                  });
 
-                    Mono<Void> input = inbound
-                            .flatMap(msg -> {
-                                switch (msg.getType()) {
-                                    case "chat/message":
-                                        return chatService.handleChatMessage(username, msg.getPayload());
-                                    case "chat/join":
-                                        String groupId = msg.getPayload().asText();
-                                        chatService.addUserToGroup(username, groupId);
-                                        return Mono.empty();
-                                    case "chat/leave":
-                                        String gid = msg.getPayload().asText();
-                                        chatService.removeUserFromGroup(username, gid);
-                                        return Mono.empty();
-                                    case "game/input":
-                                        return gameService.handlePlayerInput(username, msg.getPayload());
-                                    default:
-                                        return Mono.empty();
-                                }
-                            })
-                            .onErrorContinue((ex, obj) -> {
-                                // Логируем ошибку, но не рвём соединение
-                                log.error("Error processing: " + obj + " | " + ex.getMessage());
-                            })
-                            .then();
+                  return session.send(outbound)
+                                  .and(input)
+                                  .doFinally(sig -> cleanup.subscribe());
+              }).then();
+  }
 
-                    // При завершении сессии (отключение клиента)
-                    Mono<Void> cleanup = Mono.fromRunnable(() -> {
-                        log.info("Player {} disconnected", username);
-                        gameService.removePlayer(username);
-                    });
+  private MessageInput parseMessage(String json) {
+      if (json == null || json.trim().isEmpty()) {
+          throw new IllegalArgumentException("Empty message");
+      }
+      try {
+          JsonNode node = objectMapper.readTree(json);
+          if (!node.isArray() || node.size() < 2) {
+              throw new IllegalArgumentException("Expected [type, payload]");
+          }
+          MessageInput msg = new MessageInput();
+          msg.setType(MessageType.valueOf(node.get(0).asText()));
+          msg.setPayload(node.get(1));
+          return msg;
+      } catch (Exception e) {
+          throw new IllegalArgumentException("Invalid message format", e);
+      }
+  }
 
-                    return initialSnapshot.then(
-                            session.send(outbound)
-                                    .and(input)
-                                    .doFinally(sig -> cleanup.subscribe()));
-                }).then();
+  private WebSocketMessage createWebSocketMessage(
+          MessageOutput messageOutput, WebSocketSession session, ObjectMapper objectMapper) {
+    try {
+      ObjectNode node = objectMapper.createObjectNode();
+      node.put("type", messageOutput.getType().toString());
+      node.set("payload", objectMapper.valueToTree(messageOutput.getPayload()));
+      return session.textMessage(node.toString());
+    } catch (Exception e) {
+      throw new RuntimeException("Serialization error", e);
     }
-
-    private GameMessageInput parseMessage(String json) {
-        if (json == null || json.trim().isEmpty()) {
-            throw new IllegalArgumentException("Empty message");
-        }
-        try {
-            JsonNode node = objectMapper.readTree(json);
-            if (!node.isArray() || node.size() < 2) {
-                throw new IllegalArgumentException("Expected [type, payload]");
-            }
-            GameMessageInput msg = new GameMessageInput();
-            msg.setType(node.get(0).asText());
-            msg.setPayload(node.get(1));
-            return msg;
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid message format", e);
-        }
-    }
-
-    private String toJson(ChatMessage msg) {
-        try {
-            return objectMapper.writeValueAsString(new Object[]{"chat", msg});
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private WebSocketMessage createWebSocketMessage(String type, Object payload, WebSocketSession session) {
-        try {
-            ObjectNode node = objectMapper.createObjectNode();
-            node.put("type", type);
-            node.set("payload", objectMapper.valueToTree(payload));
-            return session.textMessage(node.toString());
-        } catch (Exception e) {
-            throw new RuntimeException("Serialization error", e);
-        }
-    }
+  }
 }
 
