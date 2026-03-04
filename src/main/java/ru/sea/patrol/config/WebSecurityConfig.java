@@ -19,8 +19,8 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.security.JwtAuthenticationConverter;
-import ru.sea.patrol.security.ReactiveSecurityManager;
+import ru.sea.patrol.auth.security.JwtAuthenticationConverter;
+import ru.sea.patrol.auth.security.ReactiveSecurityManager;
 
 import java.util.List;
 

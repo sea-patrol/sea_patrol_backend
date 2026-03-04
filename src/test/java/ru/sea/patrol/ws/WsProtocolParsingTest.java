@@ -6,9 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.handler.GameWebSocketHandler;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameService;
 
@@ -73,4 +73,3 @@ class WsProtocolParsingTest {
 		}
 	}
 }
-

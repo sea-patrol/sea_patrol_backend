@@ -25,16 +25,16 @@
 ## 3. Структура репозитория
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
-- `src/main/java/ru/sea/patrol/controller` — REST auth и отдача SPA.
-- `src/main/java/ru/sea/patrol/handler` — единый WebSocket handler.
+- `src/main/java/ru/sea/patrol/controller` — отдача SPA (`/`, `/game`).
+- `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
+- `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
+- `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
 - `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, цикл обновления, игроки.
-- `src/main/java/ru/sea/patrol/security` — JWT-проверка, authentication manager, converter.
-- `src/main/java/ru/sea/patrol/repository` — in-memory репозиторий пользователей.
-- `src/main/java/ru/sea/patrol/errorhandling` — единый JSON-формат ошибок для приложенческих исключений.
+- `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения и JWT.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
-- `src/test/java/ru/sea/patrol` — тесты (на текущий момент минимальные).
+- `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
 ## 4. Runtime-потоки
 ### 4.1 HTTP / Auth
@@ -73,5 +73,5 @@
 
 ## 7. Риски и техдолг
 - `application.yaml` содержит фиксированный JWT secret (для продакшена требуется внешняя конфигурация).
-- Тестовое покрытие минимальное (фактически нет активных интеграционных/юнит тестов).
+- Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.

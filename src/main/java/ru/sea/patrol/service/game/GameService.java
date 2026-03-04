@@ -6,10 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.dto.websocket.MessageOutput;
-import ru.sea.patrol.dto.websocket.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
+import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 
 import java.util.Map;
 import java.util.Random;

@@ -6,7 +6,7 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 import reactor.core.Disposable;
 import reactor.core.publisher.Sinks;
-import ru.sea.patrol.dto.websocket.MessageOutput;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 
 @Getter
 @Setter
