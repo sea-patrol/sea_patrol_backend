@@ -3,6 +3,7 @@ package ru.sea.patrol.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.HashMap;
 import java.util.Date;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -37,18 +38,31 @@ class JwtUtilTest {
 	void check_expiredToken_returnsUnauthorizedException() {
 		String token = jwtUtil.generateToken(
 				new Date(System.currentTimeMillis() - 5_000),
-				Map.of("role", "USER"),
+				new HashMap<>(Map.of("role", "USER")),
 				"alice"
 		).getToken();
 
 		assertThatThrownBy(() -> jwtUtil.check(token).block())
-				.isInstanceOf(UnauthorizedException.class);
+				.satisfies(JwtUtilTest::assertUnauthorized);
 	}
 
 	@Test
 	void check_invalidToken_returnsUnauthorizedException() {
 		assertThatThrownBy(() -> jwtUtil.check("not-a-jwt").block())
-				.isInstanceOf(UnauthorizedException.class);
+				.satisfies(JwtUtilTest::assertUnauthorized);
+	}
+
+	private static void assertUnauthorized(Throwable thrown) {
+		if (thrown instanceof UnauthorizedException) {
+			return;
+		}
+		Throwable cause = thrown.getCause();
+		while (cause != null) {
+			if (cause instanceof UnauthorizedException) {
+				return;
+			}
+			cause = cause.getCause();
+		}
+		throw new AssertionError("Expected UnauthorizedException, but got: " + thrown.getClass().getName(), thrown);
 	}
 }
-

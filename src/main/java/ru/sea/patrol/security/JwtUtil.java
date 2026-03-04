@@ -57,7 +57,7 @@ public class JwtUtil {
     }
 
     public Mono<TokenVerificationResult> check(String accessToken) {
-        return Mono.just(verify(accessToken))
+        return Mono.fromCallable(() -> verify(accessToken))
                 .onErrorResume(e -> Mono.error(new UnauthorizedException(e.getMessage())));
     }
 

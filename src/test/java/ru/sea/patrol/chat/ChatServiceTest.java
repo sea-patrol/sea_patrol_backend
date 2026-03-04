@@ -1,12 +1,13 @@
 package ru.sea.patrol.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
-import reactor.test.StepVerifier;
 import ru.sea.patrol.dto.websocket.ChatMessage;
 import ru.sea.patrol.dto.websocket.MessageInput;
 import ru.sea.patrol.dto.websocket.MessageOutput;
@@ -23,13 +24,11 @@ class ChatServiceTest {
 
 		Flux<ChatMessage> aliceMessages = chatMessages(chatService.initialize("alice"));
 
-		StepVerifier.create(aliceMessages.take(1))
-				.assertNext(msg -> {
-					assertThat(msg.getFrom()).isEqualTo("system");
-					assertThat(msg.getTo()).isEqualTo("global");
-					assertThat(msg.getText()).contains("alice").contains("joined");
-				})
-				.verifyComplete();
+		ChatMessage msg = aliceMessages.next().block(Duration.ofSeconds(1));
+		assertThat(msg).isNotNull();
+		assertThat(msg.getFrom()).isEqualTo("system");
+		assertThat(msg.getTo()).isEqualTo("global");
+		assertThat(msg.getText()).contains("alice").contains("joined");
 	}
 
 	@Test
@@ -42,13 +41,13 @@ class ChatServiceTest {
 		chatService.handleChatMessage("alice", objectMapper.valueToTree(new ChatMessage("ignored", "global", "hi")))
 				.block(Duration.ofSeconds(1));
 
-		StepVerifier.create(alice.filter(m -> "hi".equals(m.getText())).take(1))
-				.assertNext(m -> assertThat(m.getFrom()).isEqualTo("alice"))
-				.verifyComplete();
+		ChatMessage aliceReceived = alice.filter(m -> "hi".equals(m.getText())).next().block(Duration.ofSeconds(1));
+		assertThat(aliceReceived).isNotNull();
+		assertThat(aliceReceived.getFrom()).isEqualTo("alice");
 
-		StepVerifier.create(bob.filter(m -> "hi".equals(m.getText())).take(1))
-				.assertNext(m -> assertThat(m.getFrom()).isEqualTo("alice"))
-				.verifyComplete();
+		ChatMessage bobReceived = bob.filter(m -> "hi".equals(m.getText())).next().block(Duration.ofSeconds(1));
+		assertThat(bobReceived).isNotNull();
+		assertThat(bobReceived.getFrom()).isEqualTo("alice");
 	}
 
 	@Test
@@ -61,19 +60,15 @@ class ChatServiceTest {
 		chatService.handleChatMessage("alice", objectMapper.valueToTree(new ChatMessage("ignored", "user:bob", "pm")))
 				.block(Duration.ofSeconds(1));
 
-		StepVerifier.create(bob.filter(m -> "pm".equals(m.getText())).take(1))
-				.assertNext(m -> {
-					assertThat(m.getFrom()).isEqualTo("alice");
-					assertThat(m.getTo()).isEqualTo("user:bob");
-				})
-				.verifyComplete();
+		ChatMessage bobReceived = bob.filter(m -> "pm".equals(m.getText())).next().block(Duration.ofSeconds(1));
+		assertThat(bobReceived).isNotNull();
+		assertThat(bobReceived.getFrom()).isEqualTo("alice");
+		assertThat(bobReceived.getTo()).isEqualTo("user:bob");
 
-		StepVerifier.create(alice.filter(m -> "pm".equals(m.getText())).take(1))
-				.assertNext(m -> {
-					assertThat(m.getFrom()).isEqualTo("alice");
-					assertThat(m.getTo()).isEqualTo("user:bob");
-				})
-				.verifyComplete();
+		ChatMessage aliceReceived = alice.filter(m -> "pm".equals(m.getText())).next().block(Duration.ofSeconds(1));
+		assertThat(aliceReceived).isNotNull();
+		assertThat(aliceReceived.getFrom()).isEqualTo("alice");
+		assertThat(aliceReceived.getTo()).isEqualTo("user:bob");
 	}
 
 	@Test
@@ -91,17 +86,14 @@ class ChatServiceTest {
 		chatService.handleChatMessage("alice", objectMapper.valueToTree(new ChatMessage("ignored", group, "group hello")))
 				.block(Duration.ofSeconds(1));
 
-		StepVerifier.create(alice.filter(m -> "group hello".equals(m.getText())).take(1))
-				.assertNext(m -> {
-					assertThat(m.getFrom()).isEqualTo("alice");
-					assertThat(m.getTo()).isEqualTo(group);
-				})
-				.verifyComplete();
+		ChatMessage aliceReceived = alice.filter(m -> "group hello".equals(m.getText())).next().block(Duration.ofSeconds(1));
+		assertThat(aliceReceived).isNotNull();
+		assertThat(aliceReceived.getFrom()).isEqualTo("alice");
+		assertThat(aliceReceived.getTo()).isEqualTo(group);
 
-		StepVerifier.create(bob.filter(m -> "group hello".equals(m.getText())))
-				.expectNoEvent(Duration.ofMillis(200))
-				.thenCancel()
-				.verify();
+		assertThatThrownBy(() -> bob.filter(m -> "group hello".equals(m.getText())).next().block(Duration.ofMillis(200)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasCauseInstanceOf(TimeoutException.class);
 	}
 
 	private static Flux<ChatMessage> chatMessages(Flux<MessageOutput> outputs) {
@@ -110,4 +102,3 @@ class ChatServiceTest {
 				.map(o -> (ChatMessage) o.getPayload());
 	}
 }
-
