@@ -11,7 +11,7 @@
 
 ## Кратко о проекте
 - Стек: `Spring Boot 3.5.6` + `WebFlux` + `Spring Security` + `JWT`.
-- Язык/сборка: `Java 24`, `Gradle (Kotlin DSL)`.
+- Язык/сборка: `Java 25`, `Gradle (Kotlin DSL)`.
 - Реалтайм: WebSocket-обработчик игры на `/ws/game`.
 - Игровая логика: `LibGDX + Box2D + gdx-ai`.
 - Хранилище пользователей: in-memory (без БД).

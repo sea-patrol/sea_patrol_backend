@@ -13,7 +13,7 @@
   - чат (глобальный, групповой, личный).
 
 ## 2. Технологический стек
-- Язык: `Java 24` (toolchain в Gradle).
+- Язык: `Java 25` (toolchain в Gradle).
 - Framework: `Spring Boot 3.5.6`.
 - Web: `spring-boot-starter-webflux`.
 - Security: `spring-boot-starter-security`, JWT на `jjwt 0.9.1`.
