@@ -1,0 +1,138 @@
+package ru.sea.patrol.auth;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
+
+@SpringBootTest
+@AutoConfigureWebTestClient
+class AuthControllerTest {
+
+	@Autowired
+	private WebTestClient webTestClient;
+
+	@Test
+	void signup_createsUser_andReturnsUsername() {
+		String username = "test_" + UUID.randomUUID();
+
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "%s",
+						  "password": "123456",
+						  "email": "user@example.com"
+						}
+						""".formatted(username))
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.username").isEqualTo(username);
+	}
+
+	@Test
+	void login_returnsToken_andTimestamps_forExistingUser() {
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "user1",
+						  "password": "123456"
+						}
+						""")
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.consumeWith(result -> assertThat(result.getResponseBody()).isNotNull())
+				.jsonPath("$.username").isEqualTo("user1")
+				.jsonPath("$.token").isNotEmpty()
+				.jsonPath("$.issuedAt").isNotEmpty()
+				.jsonPath("$.expiresAt").isNotEmpty();
+	}
+
+	@Test
+	void signup_thenLogin_works() {
+		String username = "test_" + UUID.randomUUID();
+
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "%s",
+						  "password": "123456",
+						  "email": "user@example.com"
+						}
+						""".formatted(username))
+				.exchange()
+				.expectStatus().isOk();
+
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "%s",
+						  "password": "123456"
+						}
+						""".formatted(username))
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.username").isEqualTo(username)
+				.jsonPath("$.token").isNotEmpty();
+	}
+
+	@Test
+	void login_invalidPassword_returns401_withErrorCode() {
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "user1",
+						  "password": "wrong"
+						}
+						""")
+				.exchange()
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_PASSWORD");
+	}
+
+	@Test
+	void login_invalidUsername_returns401_withErrorCode() {
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "no_such_user",
+						  "password": "123456"
+						}
+						""")
+				.exchange()
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_USERNAME");
+	}
+}
