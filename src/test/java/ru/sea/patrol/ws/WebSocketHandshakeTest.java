@@ -18,8 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.auth.AuthResponseDto;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.auth.api.dto.AuthResponseDto;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
@@ -90,4 +90,3 @@ class WebSocketHandshakeTest {
 		return response.getToken();
 	}
 }
-

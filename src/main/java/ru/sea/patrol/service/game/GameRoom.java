@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.*;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.*;
 
 import java.util.Map;
 import java.util.concurrent.*;

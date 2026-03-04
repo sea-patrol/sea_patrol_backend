@@ -8,11 +8,11 @@ import java.time.Duration;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
-import ru.sea.patrol.dto.websocket.ChatMessage;
-import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.dto.websocket.MessageOutput;
 import ru.sea.patrol.service.chat.ChatService;
-import ru.sea.patrol.MessageType;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.ChatMessage;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 
 class ChatServiceTest {
 

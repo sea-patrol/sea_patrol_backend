@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import ru.sea.patrol.dto.websocket.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 import ru.sea.patrol.service.game.Player;
 import ru.sea.patrol.service.game.PlayerShipInstance;
 import ru.sea.patrol.service.game.Wind;
@@ -109,4 +109,3 @@ class PlayerShipInstancePhysicsTest extends Box2DTestBase {
 		return new PlayerShipInstance(world, player);
 	}
 }
-

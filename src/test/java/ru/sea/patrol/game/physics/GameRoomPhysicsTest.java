@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.InitGameStateMessage;
-import ru.sea.patrol.dto.websocket.MessageOutput;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.InitGameStateMessage;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.service.game.GameRoom;
 import ru.sea.patrol.service.game.Player;
 
