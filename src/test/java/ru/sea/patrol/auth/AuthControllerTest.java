@@ -9,6 +9,7 @@ import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWeb
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import ru.sea.patrol.dto.auth.AuthResponseDto;
 
 @SpringBootTest
 @AutoConfigureWebTestClient
@@ -16,6 +17,29 @@ class AuthControllerTest {
 
 	@Autowired
 	private WebTestClient webTestClient;
+
+	private String loginAndGetToken(String username, String password) {
+		AuthResponseDto response = webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "%s",
+						  "password": "%s"
+						}
+						""".formatted(username, password))
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody(AuthResponseDto.class)
+				.returnResult()
+				.getResponseBody();
+
+		assertThat(response).isNotNull();
+		assertThat(response.getToken()).isNotBlank();
+		return response.getToken();
+	}
 
 	@Test
 	void signup_createsUser_andReturnsUsername() {
@@ -60,6 +84,30 @@ class AuthControllerTest {
 				.jsonPath("$.token").isNotEmpty()
 				.jsonPath("$.issuedAt").isNotEmpty()
 				.jsonPath("$.expiresAt").isNotEmpty();
+	}
+
+	@Test
+	void me_withoutToken_returns401() {
+		webTestClient
+				.get()
+				.uri("/api/v1/auth/me")
+				.exchange()
+				.expectStatus().isUnauthorized();
+	}
+
+	@Test
+	void me_withToken_returnsUsername() {
+		String token = loginAndGetToken("user1", "123456");
+
+		webTestClient
+				.get()
+				.uri("/api/v1/auth/me")
+				.headers(headers -> headers.setBearerAuth(token))
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.username").isEqualTo("user1");
 	}
 
 	@Test

@@ -3,6 +3,8 @@ package ru.sea.patrol.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.core.context.SecurityContext;
 import ru.sea.patrol.dto.auth.AuthRequestDto;
 import ru.sea.patrol.dto.auth.AuthResponseDto;
 import ru.sea.patrol.dto.auth.UserDto;
@@ -34,5 +36,16 @@ public class AuthController {
                                 .expiresAt(tokenDetails.getExpiresAt())
                                 .build()
                 ));
+    }
+
+    @GetMapping("/me")
+    public Mono<UserDto> me() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .map(authentication -> {
+                    var dto = new UserDto();
+                    dto.setUsername(authentication.getName());
+                    return dto;
+                });
     }
 }
