@@ -48,6 +48,8 @@ dependencies {
 	annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+	// Explicitly include Box2D natives for tests (testRuntimeClasspath)
+	testRuntimeOnly("com.badlogicgames.gdx:gdx-box2d-platform:1.12.1:natives-desktop")
 }
 
 tasks.withType<Test> {
