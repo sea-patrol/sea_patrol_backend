@@ -1,0 +1,9 @@
+# Test-only defaults. Do not put real secrets here.
+spring:
+  main:
+    web-application-type: reactive
+
+jwt:
+  secret: test-secret-not-for-production
+  expiration: 3600
+  issuer: seapatrol-test
