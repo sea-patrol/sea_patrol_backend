@@ -72,6 +72,10 @@ public class GameRoom {
   }
 
   public void start() {
+    start(true);
+  }
+
+  public void start(boolean scheduleUpdates) {
     log.info("Starting room game {}", name);
     if (started) {
       return;
@@ -89,9 +93,11 @@ public class GameRoom {
 
     broadcastStartMessage();
 
-    scheduler = Executors.newSingleThreadScheduledExecutor();
-    scheduledFuture = scheduler.scheduleWithFixedDelay(
-            this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
+    if (scheduleUpdates) {
+      scheduler = Executors.newSingleThreadScheduledExecutor();
+      scheduledFuture = scheduler.scheduleWithFixedDelay(
+              this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
+    }
   }
 
   public void update() {
@@ -121,14 +127,14 @@ public class GameRoom {
       scheduler.shutdownNow();
       scheduler = null;
     }
+    for (var player : players.values()) {
+      player.leaveRoom();
+    }
     if (world != null) {
       world.dispose();
       world = null;
     }
     wind = null;
-    for (var player : players.values()) {
-      player.leaveRoom();
-    }
     started = false;
   }
 
