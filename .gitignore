@@ -1,5 +1,6 @@
 .gigaide
 .gradle
+.gradle-user-home/
 db/
 build/
 !gradle/wrapper/gradle-wrapper.jar
@@ -36,3 +37,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+raw/*
+!raw/refactor.md
+!raw/cdxtsk-*.md
+raw/logs/
+*.log

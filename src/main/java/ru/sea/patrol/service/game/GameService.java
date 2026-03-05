@@ -1,15 +1,16 @@
 package ru.sea.patrol.service.game;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.dto.websocket.MessageOutput;
-import ru.sea.patrol.dto.websocket.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
+import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 
 import java.util.Map;
 import java.util.Random;
@@ -17,9 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GameService {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper;
   private final Random random = new Random();
 
   private final Map<String, Player> players = new ConcurrentHashMap<>();

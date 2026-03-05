@@ -1,27 +1,28 @@
 package ru.sea.patrol.service.chat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.ChatMessage;
-import ru.sea.patrol.dto.websocket.MessageInput;
-import ru.sea.patrol.dto.websocket.MessageOutput;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.ChatMessage;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ChatService {
 
   private static final String GLOBAL_CHAT_GROUP = "global";
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper;
 
   // Groups: "global", "group:123", "user:alice"
   private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();

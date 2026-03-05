@@ -2,12 +2,11 @@ package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
-import ru.sea.patrol.MessageType;
-import ru.sea.patrol.dto.websocket.*;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.*;
 
 import java.util.Map;
 import java.util.concurrent.*;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GameRoom {
 
-  private ObjectMapper objectMapper = new ObjectMapper();
 
   @Getter
   private final String name;
@@ -71,7 +69,11 @@ public class GameRoom {
     return players.isEmpty();
   }
 
-  public void start() {
+  public synchronized void start() {
+    start(true);
+  }
+
+  public synchronized void start(boolean scheduleUpdates) {
     log.info("Starting room game {}", name);
     if (started) {
       return;
@@ -89,9 +91,11 @@ public class GameRoom {
 
     broadcastStartMessage();
 
-    scheduler = Executors.newSingleThreadScheduledExecutor();
-    scheduledFuture = scheduler.scheduleWithFixedDelay(
-            this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
+    if (scheduleUpdates) {
+      scheduler = Executors.newSingleThreadScheduledExecutor();
+      scheduledFuture = scheduler.scheduleWithFixedDelay(
+              this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
+    }
   }
 
   public void update() {
@@ -112,7 +116,7 @@ public class GameRoom {
     sendUpdateMessage();
   }
 
-  public void stop() {
+  public synchronized void stop() {
     log.info("Stopping room game {}", name);
     if (scheduledFuture != null && !scheduledFuture.isCancelled()) {
       scheduledFuture.cancel(false);
@@ -121,14 +125,14 @@ public class GameRoom {
       scheduler.shutdownNow();
       scheduler = null;
     }
+    for (var player : players.values()) {
+      player.leaveRoom();
+    }
     if (world != null) {
       world.dispose();
       world = null;
     }
     wind = null;
-    for (var player : players.values()) {
-      player.leaveRoom();
-    }
     started = false;
   }
 

@@ -10,7 +10,7 @@ Backend для мультиплеерной игры Sea Patrol на `Spring Boo
 - In-memory хранилище пользователей (без БД)
 
 ## Быстрый старт
-Требования: `Java 24`.
+Требования: `Java 25`.
 
 Windows:
 ```powershell

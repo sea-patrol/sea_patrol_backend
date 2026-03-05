@@ -1,6 +1,6 @@
 plugins {
 	java
-	id("org.springframework.boot") version "3.5.6"
+	id("org.springframework.boot") version "4.0.3"
 	id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -10,7 +10,7 @@ description = "Sea patrol project for Spring Boot"
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(24)
+		languageVersion = JavaLanguageVersion.of(25)
 	}
 }
 
@@ -26,12 +26,13 @@ repositories {
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-webflux")
-	implementation ("org.springframework.boot:spring-boot-starter-security")
-	implementation ("org.springframework.session:spring-session-core")
+	implementation("org.springframework.boot:spring-boot-starter-security")
+	implementation("org.springframework.session:spring-session-core")
 	implementation("org.mapstruct:mapstruct:1.6.3")
-	implementation ("org.springframework.boot:spring-boot-starter-validation")
-	implementation("io.jsonwebtoken:jjwt:0.9.1")
-	implementation("javax.xml.bind:jaxb-api:2.3.1")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
 	// LibGDX Core (вектора, коллекции, утилиты)
 	implementation("com.badlogicgames.gdx:gdx:1.12.1")
@@ -46,8 +47,12 @@ dependencies {
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 	annotationProcessor("org.projectlombok:lombok")
 	annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
+
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testImplementation("org.springframework.boot:spring-boot-webtestclient")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+	// Explicitly include Box2D natives for tests (testRuntimeClasspath)
+	testRuntimeOnly("com.badlogicgames.gdx:gdx-box2d-platform:1.12.1:natives-desktop")
 }
 
 tasks.withType<Test> {
