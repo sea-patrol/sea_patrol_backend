@@ -44,7 +44,7 @@ public class WebSecurityConfig {
 
 	private final ReactiveSecurityManager securityManager;
 	private final JwtAuthenticationConverter bearerTokenServerAuthenticationConverter;
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final ObjectMapper objectMapper;
 
 	@Bean
 	public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
@@ -124,5 +124,6 @@ public class WebSecurityConfig {
 		return bearerAuthenticationFilter;
 	}
 }
+
 
 

@@ -2,7 +2,6 @@ package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
-import tools.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GameRoom {
 
-  private ObjectMapper objectMapper = new ObjectMapper();
 
   @Getter
   private final String name;
