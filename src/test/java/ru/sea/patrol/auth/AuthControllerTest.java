@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.sea.patrol.auth.api.dto.AuthResponseDto;
@@ -93,6 +94,32 @@ class AuthControllerTest {
 				.uri("/api/v1/auth/me")
 				.exchange()
 				.expectStatus().isUnauthorized();
+	}
+
+	@Test
+	void me_withEmptyBearerToken_returns401_withErrorCode() {
+		webTestClient
+				.get()
+				.uri("/api/v1/auth/me")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer ")
+				.exchange()
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED");
+	}
+
+	@Test
+	void me_withGarbageToken_returns401_withErrorCode() {
+		webTestClient
+				.get()
+				.uri("/api/v1/auth/me")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt")
+				.exchange()
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED");
 	}
 
 	@Test

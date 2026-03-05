@@ -16,7 +16,7 @@
 - Язык: `Java 25` (toolchain в Gradle).
 - Framework: `Spring Boot 4.0.3`.
 - Web: `spring-boot-starter-webflux`.
-- Security: `spring-boot-starter-security`, JWT на `jjwt 0.9.1`.
+- Security: `spring-boot-starter-security`, JWT на `jjwt 0.13.0`.
 - Mapping: `MapStruct 1.6.3`.
 - Utility: `Lombok`.
 - Игровая физика: `LibGDX 1.12.1`, `Box2D`, `gdx-ai`.
@@ -62,6 +62,10 @@
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
 
 ## 6. Сборка и запуск
+- Для запуска требуется JWT secret (одна из переменных окружения):
+  - `JWT_SECRET` — raw строка (рекомендуется >= 32 байта);
+  - `JWT_SECRET_BASE64` — base64/base64url-байты (после декодирования >= 32 байта).
+
 - Windows:
   - `.\gradlew.bat bootRun`
   - `.\gradlew.bat test`
@@ -72,6 +76,6 @@
   - `./gradlew build`
 
 ## 7. Риски и техдолг
-- `application.yaml` содержит фиксированный JWT secret (для продакшена требуется внешняя конфигурация).
+- JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
