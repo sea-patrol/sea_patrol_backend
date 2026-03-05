@@ -14,7 +14,6 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.function.Function;
 
 @Component
 @RequiredArgsConstructor
@@ -22,12 +21,10 @@ public class JwtAuthenticationConverter implements ServerAuthenticationConverter
 
     private final JwtUtil jwtService;
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final Function<String, Mono<String>> getBearerValue = authValue -> Mono.justOrEmpty(authValue.substring(BEARER_PREFIX.length()));
 
     @Override
     public Mono<Authentication> convert(ServerWebExchange exchange) {
         return extractJwtToken(exchange)
-                .flatMap(getBearerValue)
                 .flatMap(jwtService::check)
                 .flatMap(this::create);
     }
@@ -35,10 +32,12 @@ public class JwtAuthenticationConverter implements ServerAuthenticationConverter
     private Mono<String> extractJwtToken(ServerWebExchange exchange) {
         ServerHttpRequest request = exchange.getRequest();
         if (request.getMethod() == HttpMethod.GET && request.getURI().getPath().startsWith("/ws/")) {
-            return Mono.justOrEmpty(BEARER_PREFIX + request.getQueryParams().getFirst("token"));
-        } else {
-            return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+            return Mono.justOrEmpty(request.getQueryParams().getFirst("token"));
         }
+
+        return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
+                .filter(value -> value.startsWith(BEARER_PREFIX))
+                .map(value -> value.substring(BEARER_PREFIX.length()));
     }
 
     public Mono<Authentication> create(TokenVerificationResult verificationResult) {

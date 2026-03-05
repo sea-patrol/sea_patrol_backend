@@ -2,7 +2,7 @@ package ru.sea.patrol.auth.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -10,7 +10,9 @@ import reactor.core.publisher.Mono;
 import ru.sea.patrol.user.domain.UserEntity;
 import ru.sea.patrol.error.domain.UnauthorizedException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import javax.crypto.SecretKey;
 
 @Slf4j
 @Component
@@ -39,14 +41,15 @@ public class JwtUtil {
 
     public TokenDetails generateToken(Date expirationDate, Map<String, Object> claims, String subject) {
         Date createdDate = new Date();
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         String token = Jwts.builder()
-                .setClaims(claims)
-                .setIssuer(issuer)
-                .setSubject(subject)
-                .setIssuedAt(createdDate)
-                .setId(UUID.randomUUID().toString())
-                .setExpiration(expirationDate)
-                .signWith(SignatureAlgorithm.HS256, Base64.getEncoder().encodeToString(secret.getBytes()))
+                .claims(claims)
+                .issuer(issuer)
+                .subject(subject)
+                .issuedAt(createdDate)
+                .id(UUID.randomUUID().toString())
+                .expiration(expirationDate)
+                .signWith(key)
                 .compact();
 
         return TokenDetails.builder()
@@ -74,9 +77,11 @@ public class JwtUtil {
     }
 
     private Claims getClaimsFromToken(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         return Jwts.parser()
-                .setSigningKey(Base64.getEncoder().encodeToString(secret.getBytes()))
-                .parseClaimsJws(token)
-                .getBody();
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }

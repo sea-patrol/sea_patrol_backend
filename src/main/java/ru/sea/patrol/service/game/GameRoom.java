@@ -2,7 +2,7 @@ package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
@@ -71,11 +71,11 @@ public class GameRoom {
     return players.isEmpty();
   }
 
-  public void start() {
+  public synchronized void start() {
     start(true);
   }
 
-  public void start(boolean scheduleUpdates) {
+  public synchronized void start(boolean scheduleUpdates) {
     log.info("Starting room game {}", name);
     if (started) {
       return;
@@ -118,7 +118,7 @@ public class GameRoom {
     sendUpdateMessage();
   }
 
-  public void stop() {
+  public synchronized void stop() {
     log.info("Stopping room game {}", name);
     if (scheduledFuture != null && !scheduledFuture.isCancelled()) {
       scheduledFuture.cancel(false);

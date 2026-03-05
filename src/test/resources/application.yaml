@@ -4,6 +4,6 @@ spring:
     web-application-type: reactive
 
 jwt:
-  secret: test-secret-not-for-production
+  secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   expiration: 3600
   issuer: seapatrol-test

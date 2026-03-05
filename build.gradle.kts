@@ -30,8 +30,9 @@ dependencies {
 	implementation ("org.springframework.session:spring-session-core")
 	implementation("org.mapstruct:mapstruct:1.6.3")
 	implementation ("org.springframework.boot:spring-boot-starter-validation")
-	implementation("io.jsonwebtoken:jjwt:0.9.1")
-	implementation("javax.xml.bind:jaxb-api:2.3.1")
+	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+	runtimeOnly("io.jsonwebtoken:jjwt-gson:0.13.0")
 
 	// LibGDX Core (вектора, коллекции, утилиты)
 	implementation("com.badlogicgames.gdx:gdx:1.12.1")

@@ -1,8 +1,8 @@
 package ru.sea.patrol.ws.game;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -63,18 +63,22 @@ public class GameWebSocketHandler implements WebSocketHandler {
                           })
                           .then();
 
-                  // При завершении сессии (отключение клиента)
-                  Mono<Void> cleanup = Mono.fromRunnable(() -> {
-                    chatService.cleanupUser(username);
-                    gameService.cleanupPlayer(username);
-                    log.info("Player {} disconnected", username);
-                  });
+                   // При завершении сессии (отключение клиента)
+                   Mono<Void> cleanup = Mono.fromRunnable(() -> {
+                     chatService.cleanupUser(username);
+                     gameService.cleanupPlayer(username);
+                     log.info("Player {} disconnected", username);
+                   });
 
-                  return session.send(outbound)
-                                  .and(input)
-                                  .doFinally(sig -> cleanup.subscribe());
-              }).then();
-  }
+                   Mono<Void> sessionFlow = session.send(outbound).and(input);
+                   return Mono.usingWhen(
+                           Mono.just(username),
+                           __ -> sessionFlow,
+                           __ -> cleanup,
+                           (__, err) -> cleanup,
+                           __ -> cleanup);
+               }).then();
+   }
 
   private MessageInput parseMessage(String json) {
       if (json == null || json.trim().isEmpty()) {

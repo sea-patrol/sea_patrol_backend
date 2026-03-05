@@ -2,8 +2,8 @@ package ru.sea.patrol.ws;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -36,8 +36,31 @@ class WebSocketHandshakeTest {
 	@Test
 	void wsHandshake_withValidJwt_receivesValidMessageEnvelope() throws Exception {
 		String token = loginAndGetToken("user1", "123456");
-		String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
+		String payload = connectAndReceiveFirstMessage(token);
+		assertThat(payload).isNotBlank();
 
+		JsonNode root = objectMapper.readTree(payload);
+		assertThat(root.isObject()).isTrue();
+		assertThat(root.hasNonNull("type")).isTrue();
+		assertThat(root.has("payload")).isTrue();
+
+		String typeValue = root.get("type").asText();
+		assertThat(typeValue).isNotBlank();
+		assertThat(MessageType.valueOf(typeValue)).isNotNull();
+	}
+
+	@Test
+	void wsHandshake_reconnectsSeveralTimes_doesNotHang_andReceivesMessages() {
+		String token = loginAndGetToken("user1", "123456");
+
+		for (int i = 0; i < 3; i++) {
+			String payload = connectAndReceiveFirstMessage(token);
+			assertThat(payload).isNotBlank();
+		}
+	}
+
+	private String connectAndReceiveFirstMessage(String token) {
+		String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
 		URI uri = URI.create("ws://localhost:%d/ws/game?token=%s".formatted(port, encodedToken));
 
 		ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
@@ -54,17 +77,7 @@ class WebSocketHandshakeTest {
 								.then(session.close()))
 				.block(Duration.ofSeconds(5));
 
-		String payload = firstMessage.get();
-		assertThat(payload).isNotBlank();
-
-		JsonNode root = objectMapper.readTree(payload);
-		assertThat(root.isObject()).isTrue();
-		assertThat(root.hasNonNull("type")).isTrue();
-		assertThat(root.has("payload")).isTrue();
-
-		String typeValue = root.get("type").asText();
-		assertThat(typeValue).isNotBlank();
-		assertThat(MessageType.valueOf(typeValue)).isNotNull();
+		return firstMessage.get();
 	}
 
 	private String loginAndGetToken(String username, String password) {
