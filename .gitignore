@@ -1,5 +1,6 @@
 .gigaide
 .gradle
+.gradle-user-home/
 db/
 build/
 !gradle/wrapper/gradle-wrapper.jar

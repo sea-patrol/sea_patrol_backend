@@ -3,6 +3,11 @@ spring:
     name: sea.patrol
 
 jwt:
-  secret: b5f59337a612a2a7dc07328f3e7d1a04722967c7f06df20a499a7d3f91ff2a7e
-  expiration: 3600
-  issuer: seapatrol
+  # Do not commit real secrets. Provide via env (see ai-docs/PROJECT_INFO.md).
+  # One of these must be set:
+  # - JWT_SECRET (raw string, >= 32 bytes recommended)
+  # - JWT_SECRET_BASE64 (base64/base64url-encoded bytes, >= 32 bytes after decoding)
+  secret: ${JWT_SECRET:b5f59337a612a2a7dc07328f3e7d1a04722967c7f06df20a499a7d3f91ff2a7e}
+  secret-base64: ${JWT_SECRET_BASE64:}
+  expiration: ${JWT_EXPIRATION:3600}
+  issuer: ${JWT_ISSUER:seapatrol}

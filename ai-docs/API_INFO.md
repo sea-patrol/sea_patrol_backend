@@ -244,7 +244,7 @@ Payload:
 - `500` для прочих ошибок.
 
 Важно:
-- Ошибки, обработанные напрямую security entry point/access denied handler, могут вернуть только HTTP-статус (`401`/`403`) без JSON-тела.
+- Ошибки, обработанные напрямую security entry point/access denied handler, возвращают JSON в том же формате (например, `SEAPATROL_UNAUTHORIZED` / `SEAPATROL_FORBIDDEN`).
 
 ## 6. CORS (текущее значение)
 Разрешенные origins:

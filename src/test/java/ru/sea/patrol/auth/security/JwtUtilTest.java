@@ -3,13 +3,14 @@ package ru.sea.patrol.auth.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.HashMap;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import ru.sea.patrol.error.domain.UnauthorizedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.CredentialsExpiredException;
 import ru.sea.patrol.user.domain.UserEntity;
 import ru.sea.patrol.user.domain.UserRole;
 
@@ -35,7 +36,7 @@ class JwtUtilTest {
 	}
 
 	@Test
-	void check_expiredToken_returnsUnauthorizedException() {
+	void check_expiredToken_returnsCredentialsExpiredException() {
 		String token = jwtUtil.generateToken(
 				new Date(System.currentTimeMillis() - 5_000),
 				new HashMap<>(Map.of("role", "USER")),
@@ -43,26 +44,26 @@ class JwtUtilTest {
 		).getToken();
 
 		assertThatThrownBy(() -> jwtUtil.check(token).block())
-				.satisfies(JwtUtilTest::assertUnauthorized);
+				.satisfies(thrown -> assertHasCauseOrSelf(thrown, CredentialsExpiredException.class));
 	}
 
 	@Test
-	void check_invalidToken_returnsUnauthorizedException() {
+	void check_invalidToken_returnsBadCredentialsException() {
 		assertThatThrownBy(() -> jwtUtil.check("not-a-jwt").block())
-				.satisfies(JwtUtilTest::assertUnauthorized);
+				.satisfies(thrown -> assertHasCauseOrSelf(thrown, BadCredentialsException.class));
 	}
 
-	private static void assertUnauthorized(Throwable thrown) {
-		if (thrown instanceof UnauthorizedException) {
+	private static <T extends Throwable> void assertHasCauseOrSelf(Throwable thrown, Class<T> expectedType) {
+		if (expectedType.isInstance(thrown)) {
 			return;
 		}
 		Throwable cause = thrown.getCause();
 		while (cause != null) {
-			if (cause instanceof UnauthorizedException) {
+			if (expectedType.isInstance(cause)) {
 				return;
 			}
 			cause = cause.getCause();
 		}
-		throw new AssertionError("Expected UnauthorizedException, but got: " + thrown.getClass().getName(), thrown);
+		throw new AssertionError("Expected %s, but got: %s".formatted(expectedType.getName(), thrown.getClass().getName()), thrown);
 	}
 }

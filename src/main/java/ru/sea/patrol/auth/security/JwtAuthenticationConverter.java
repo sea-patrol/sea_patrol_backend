@@ -1,6 +1,7 @@
 package ru.sea.patrol.auth.security;
 
 import io.jsonwebtoken.Claims;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -10,44 +11,67 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationConverter implements ServerAuthenticationConverter {
 
-    private final JwtUtil jwtService;
-    private static final String BEARER_PREFIX = "Bearer ";
+	private static final String BEARER_PREFIX = "Bearer ";
 
-    @Override
-    public Mono<Authentication> convert(ServerWebExchange exchange) {
-        return extractJwtToken(exchange)
-                .flatMap(jwtService::check)
-                .flatMap(this::create);
-    }
+	private final JwtUtil jwtService;
 
-    private Mono<String> extractJwtToken(ServerWebExchange exchange) {
-        ServerHttpRequest request = exchange.getRequest();
-        if (request.getMethod() == HttpMethod.GET && request.getURI().getPath().startsWith("/ws/")) {
-            return Mono.justOrEmpty(request.getQueryParams().getFirst("token"));
-        }
+	@Override
+	public Mono<Authentication> convert(ServerWebExchange exchange) {
+		return extractJwtToken(exchange)
+				.flatMap(jwtService::check)
+				.flatMap(this::create);
+	}
 
-        return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
-                .filter(value -> value.startsWith(BEARER_PREFIX))
-                .map(value -> value.substring(BEARER_PREFIX.length()));
-    }
+	private Mono<String> extractJwtToken(ServerWebExchange exchange) {
+		ServerHttpRequest request = exchange.getRequest();
+		String path = request.getPath().value();
 
-    public Mono<Authentication> create(TokenVerificationResult verificationResult) {
-        Claims claims = verificationResult.getClaims();
-        String subject = claims.getSubject();
+		if (HttpMethod.GET.equals(request.getMethod()) && path.startsWith("/ws/")) {
+			return Mono.justOrEmpty(request.getQueryParams().getFirst("token"))
+					.map(JwtAuthenticationConverter::stripBearerPrefixIfPresent)
+					.filter(StringUtils::hasText);
+		}
 
-        String role = claims.get("role", String.class);
+		return Mono.justOrEmpty(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION))
+				.map(String::trim)
+				.filter(JwtAuthenticationConverter::startsWithBearerPrefixIgnoreCase)
+				.map(JwtAuthenticationConverter::stripBearerPrefixIfPresent)
+				.filter(StringUtils::hasText);
+	}
 
-        List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
+	public Mono<Authentication> create(TokenVerificationResult verificationResult) {
+		Claims claims = verificationResult.getClaims();
+		String subject = claims.getSubject();
 
-        return Mono.justOrEmpty(new UsernamePasswordAuthenticationToken(subject, null, authorities));
-    }
+		String role = claims.get("role", String.class);
+		List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
+
+		return Mono.just(new UsernamePasswordAuthenticationToken(subject, null, authorities));
+	}
+
+	private static boolean startsWithBearerPrefixIgnoreCase(String value) {
+		if (value == null) {
+			return false;
+		}
+		return value.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length());
+	}
+
+	private static String stripBearerPrefixIfPresent(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		if (startsWithBearerPrefixIgnoreCase(trimmed)) {
+			return trimmed.substring(BEARER_PREFIX.length()).trim();
+		}
+		return trimmed;
+	}
 }
