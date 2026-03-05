@@ -2,232 +2,269 @@ package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.World;
-import tools.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
+import reactor.core.publisher.Sinks.EmitResult;
 import ru.sea.patrol.ws.protocol.MessageType;
-import ru.sea.patrol.ws.protocol.dto.*;
-
-import java.util.Map;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
+import ru.sea.patrol.ws.protocol.dto.InitGameStateMessage;
+import ru.sea.patrol.ws.protocol.dto.MessageOutput;
+import ru.sea.patrol.ws.protocol.dto.PlayerInfo;
+import ru.sea.patrol.ws.protocol.dto.PlayerUpdateInfo;
+import ru.sea.patrol.ws.protocol.dto.UpdateGameStateMessage;
+import ru.sea.patrol.ws.protocol.dto.WindInfo;
 
 @Slf4j
 public class GameRoom {
 
-  private ObjectMapper objectMapper = new ObjectMapper();
+	private static final long DEFAULT_UPDATE_PERIOD_MILLIS = 100L;
 
-  @Getter
-  private final String name;
+	@Getter
+	private final String name;
 
-  private final Map<String, Player> players = new ConcurrentHashMap<>();
+	private final Map<String, Player> players = new ConcurrentHashMap<>();
 
-  @Getter
-  private final Sinks.Many<MessageOutput> sink;
+	@Getter
+	private final Sinks.Many<MessageOutput> sink;
 
-  @Getter
-  private World world;
-  private Wind wind;
+	@Getter
+	private World world;
 
-  private long lastTime = System.nanoTime();
-  private float delta;
+	private Wind wind;
+	private long lastTime = System.nanoTime();
+	private float delta;
 
-  private ScheduledExecutorService scheduler;
-  private ScheduledFuture<?> scheduledFuture;
+	private ScheduledExecutorService scheduler;
+	private ScheduledFuture<?> scheduledFuture;
 
-  @Getter
-  private volatile boolean started = false;
+	@Getter
+	private volatile boolean started = false;
 
-  private long updatePeriod = 100L;
+	private final long updatePeriodMillis;
 
-  public GameRoom(String name) {
-    this.name = name;
-    this.sink = Sinks.many().multicast().onBackpressureBuffer();
-  }
+	public GameRoom(String name) {
+		this(name, DEFAULT_UPDATE_PERIOD_MILLIS);
+	}
 
-  public void join(Player player) {
-    log.info("Player {} joining room {}", player.getName(), name);
-    players.put(player.getName(), player);
-    player.joinRoom(this);
-    if (started) {
-      broadcastPlayerJoinMessage(player);
-      sendStartMessage(player);
-    }
-  }
+	public GameRoom(String name, long updatePeriodMillis) {
+		this.name = name;
+		this.updatePeriodMillis = updatePeriodMillis;
+		// Best-effort: drop messages for slow subscribers instead of unbounded buffering.
+		this.sink = Sinks.many().multicast().directBestEffort();
+	}
 
-  public void leave(String playerName) {
-    log.info("Player {} leaving room {}", playerName, name);
-    var player = players.remove(playerName);
-    if (player != null) {
-      player.leaveRoom();
-      if (started) {
-        broadcastPlayerLeaveMessage(player);
-      }
-    }
-  }
+	public synchronized void join(Player player) {
+		log.info("Player {} joining room {}", player.getName(), name);
+		players.put(player.getName(), player);
+		player.joinRoom(this);
+		if (started) {
+			broadcastPlayerJoinMessage(player);
+			sendStartMessage(player);
+		}
+	}
 
-  public boolean isEmpty() {
-    return players.isEmpty();
-  }
+	public synchronized void leave(String playerName) {
+		log.info("Player {} leaving room {}", playerName, name);
+		var player = players.remove(playerName);
+		if (player != null) {
+			player.leaveRoom();
+			if (started) {
+				broadcastPlayerLeaveMessage(player);
+				if (players.isEmpty()) {
+					stop();
+				}
+			}
+		}
+	}
 
-  public synchronized void start() {
-    start(true);
-  }
+	public boolean isEmpty() {
+		return players.isEmpty();
+	}
 
-  public synchronized void start(boolean scheduleUpdates) {
-    log.info("Starting room game {}", name);
-    if (started) {
-      return;
-    }
-    world = new World(new Vector2(0, 0), true);
-    wind = new Wind();
-    for (var player : players.values()) {
-      player.createShipInstanceInGameWorld(world);
-    }
+	public synchronized void start() {
+		start(true);
+	}
 
-    lastTime = System.nanoTime();
-    delta = retrieveDelta();
+	public synchronized void start(boolean scheduleUpdates) {
+		log.info("Starting room game {}", name);
+		if (started) {
+			return;
+		}
 
-    started = true;
+		world = new World(new Vector2(0, 0), true);
+		wind = new Wind();
+		for (var player : players.values()) {
+			player.createShipInstanceInGameWorld(world);
+		}
 
-    broadcastStartMessage();
+		lastTime = System.nanoTime();
+		delta = retrieveDelta();
 
-    if (scheduleUpdates) {
-      scheduler = Executors.newSingleThreadScheduledExecutor();
-      scheduledFuture = scheduler.scheduleWithFixedDelay(
-              this::update, 0, updatePeriod, TimeUnit.MILLISECONDS);
-    }
-  }
+		started = true;
 
-  public void update() {
-    delta = retrieveDelta();
+		// INIT messages are sent per-player to avoid relying on room-wide best-effort broadcasting.
+		players.values().forEach(this::sendStartMessage);
 
-    wind.update(delta);
+		if (scheduleUpdates) {
+			startSchedulerIfNeeded();
+		}
+	}
 
-    // Обновляем игроков
-    players.values().forEach(player -> {
-      if (player.getShip() != null) {
-        player.getShip().update(delta, wind);
-      }
-    });
+	public synchronized void update() {
+		if (!started || world == null || wind == null) {
+			return;
+		}
 
-    // Шаг физики
-    world.step(delta, 6, 2);
+		delta = retrieveDelta();
+		wind.update(delta);
 
-    sendUpdateMessage();
-  }
+		players.values().forEach(player -> {
+			if (player.getShip() != null) {
+				player.getShip().update(delta, wind);
+			}
+		});
 
-  public synchronized void stop() {
-    log.info("Stopping room game {}", name);
-    if (scheduledFuture != null && !scheduledFuture.isCancelled()) {
-      scheduledFuture.cancel(false);
-    }
-    if (scheduler != null) {
-      scheduler.shutdownNow();
-      scheduler = null;
-    }
-    for (var player : players.values()) {
-      player.leaveRoom();
-    }
-    if (world != null) {
-      world.dispose();
-      world = null;
-    }
-    wind = null;
-    started = false;
-  }
+		world.step(delta, 6, 2);
+		sendUpdateMessage();
+	}
 
-  private float retrieveDelta() {
-    long currentTime = System.nanoTime();
-    float delta = (currentTime - lastTime) / 1_000_000_000.0f;
-    lastTime = currentTime;
-    return delta;
-  }
+	public synchronized void stop() {
+		if (!started && scheduler == null && world == null && wind == null) {
+			return;
+		}
 
-  private void broadcastStartMessage() {
-    var startMessage = new MessageOutput(MessageType.INIT_GAME_STATE, new InitGameStateMessage(
-            name,
-            new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
-            players.values().stream().map(player -> new PlayerInfo(
-                    player.getName(),
-                    player.getHealth(),
-                    player.getMaxHealth(),
-                    player.getShip().getVelocity(),
-                    player.getShip().getFrontendX(),  //inverted axis for client
-                    player.getShip().getFrontendZ(),  //inverted axis for client
-                    player.getShip().getOrientation(),
-                    player.getModel(),
-                    player.getHeight(),
-                    player.getWidth(),
-                    player.getLength())
-            ).collect(Collectors.toList())
-    ));
+		log.info("Stopping room game {}", name);
 
-    sink.tryEmitNext(startMessage);
-    log.info("Room game {} sent start message", name);
-  }
+		if (scheduledFuture != null) {
+			scheduledFuture.cancel(false);
+			scheduledFuture = null;
+		}
+		if (scheduler != null) {
+			scheduler.shutdownNow();
+			scheduler = null;
+		}
 
-  private void sendStartMessage(Player player) {
-    var startMessage = new MessageOutput(MessageType.INIT_GAME_STATE, new InitGameStateMessage(
-            name,
-            new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
-            players.values().stream().map(p -> new PlayerInfo(
-                    p.getName(),
-                    p.getHealth(),
-                    p.getMaxHealth(),
-                    p.getShip().getVelocity(),
-                    p.getShip().getFrontendX(), //inverted axis for client
-                    p.getShip().getFrontendZ(),  //inverted axis for client
-                    p.getShip().getOrientation(),
-                    p.getModel(),
-                    p.getHeight(),
-                    p.getWidth(),
-                    p.getLength())
-            ).collect(Collectors.toList())
-    ));
+		for (var player : players.values()) {
+			player.leaveRoom();
+		}
 
-    player.getSink().tryEmitNext(startMessage);
-    log.info("Room game {} sent start message for player {}", name, player.getName());
-  }
+		if (world != null) {
+			world.dispose();
+			world = null;
+		}
+		wind = null;
+		started = false;
+	}
 
-  private void sendUpdateMessage() {
-    var updateMessage = new MessageOutput(MessageType.UPDATE_GAME_STATE, new UpdateGameStateMessage(
-            delta,
-            new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
-            players.values().stream().map(player -> new PlayerUpdateInfo(
-                    player.getName(),
-                    player.getHealth(),
-                    player.getShip().getVelocity(),
-                    player.getShip().getFrontendX(),  //inverted axis for client
-                    player.getShip().getFrontendZ(),  //inverted axis for client
-                    player.getShip().getOrientation())
-            ).collect(Collectors.toList())
-    ));
+	private void startSchedulerIfNeeded() {
+		if (scheduler != null) {
+			return;
+		}
+		scheduler = Executors.newSingleThreadScheduledExecutor(roomThreadFactory());
+		scheduledFuture = scheduler.scheduleWithFixedDelay(this::update, 0, updatePeriodMillis, TimeUnit.MILLISECONDS);
+	}
 
-    sink.tryEmitNext(updateMessage);
-  }
+	private ThreadFactory roomThreadFactory() {
+		return runnable -> {
+			Thread t = new Thread(runnable, "sea-patrol-room-" + name);
+			t.setDaemon(true);
+			t.setUncaughtExceptionHandler((thread, ex) -> log.error("Uncaught exception in {}", thread.getName(), ex));
+			return t;
+		};
+	}
 
-  private void broadcastPlayerJoinMessage(Player player) {
-    var joinMessage = new MessageOutput(MessageType.PLAYER_JOIN, new PlayerInfo(
-            player.getName(),
-            player.getHealth(),
-            player.getMaxHealth(),
-            player.getShip().getVelocity(),
-            player.getShip().getFrontendX(),
-            player.getShip().getFrontendZ(),
-            player.getShip().getOrientation(),
-            player.getModel(),
-            player.getHeight(),
-            player.getWidth(),
-            player.getLength()));
-    sink.tryEmitNext(joinMessage);
-    log.info("Player {} joined in the room game {}", player.getName(), name);
-  }
+	private float retrieveDelta() {
+		long currentTime = System.nanoTime();
+		float newDelta = (currentTime - lastTime) / 1_000_000_000.0f;
+		lastTime = currentTime;
+		return newDelta;
+	}
 
-  private void broadcastPlayerLeaveMessage(Player player) {
-    var leaveMessage = new MessageOutput(MessageType.PLAYER_LEAVE, player.getName());
-    sink.tryEmitNext(leaveMessage);
-    log.info("Player {} left the room game {}", player.getName(), name);
-  }
+	private void sendStartMessage(Player player) {
+		var startMessage = new MessageOutput(
+				MessageType.INIT_GAME_STATE,
+				new InitGameStateMessage(
+						name,
+						new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+						players.values().stream()
+								.map(p -> new PlayerInfo(
+										p.getName(),
+										p.getHealth(),
+										p.getMaxHealth(),
+										p.getShip().getVelocity(),
+										p.getShip().getFrontendX(),
+										p.getShip().getFrontendZ(),
+										p.getShip().getOrientation(),
+										p.getModel(),
+										p.getHeight(),
+										p.getWidth(),
+										p.getLength()
+								))
+								.collect(Collectors.toList())
+				)
+		);
+
+		player.getSink().tryEmitNext(startMessage);
+		log.info("Room game {} sent start message for player {}", name, player.getName());
+	}
+
+	private void sendUpdateMessage() {
+		var updateMessage = new MessageOutput(
+				MessageType.UPDATE_GAME_STATE,
+				new UpdateGameStateMessage(
+					delta,
+					new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+					players.values().stream()
+							.map(player -> new PlayerUpdateInfo(
+									player.getName(),
+									player.getHealth(),
+									player.getShip().getVelocity(),
+									player.getShip().getFrontendX(),
+									player.getShip().getFrontendZ(),
+									player.getShip().getOrientation()
+							))
+							.collect(Collectors.toList())
+				)
+		);
+
+		EmitResult result = sink.tryEmitNext(updateMessage);
+		if (result.isFailure() && result != EmitResult.FAIL_ZERO_SUBSCRIBER) {
+			log.debug("Room {} dropped UPDATE_GAME_STATE due to {}", name, result);
+		}
+	}
+
+	private void broadcastPlayerJoinMessage(Player player) {
+		var joinMessage = new MessageOutput(
+				MessageType.PLAYER_JOIN,
+				new PlayerInfo(
+						player.getName(),
+						player.getHealth(),
+						player.getMaxHealth(),
+						player.getShip().getVelocity(),
+						player.getShip().getFrontendX(),
+						player.getShip().getFrontendZ(),
+						player.getShip().getOrientation(),
+						player.getModel(),
+						player.getHeight(),
+						player.getWidth(),
+						player.getLength()
+				)
+		);
+		sink.tryEmitNext(joinMessage);
+		log.info("Player {} joined in the room game {}", player.getName(), name);
+	}
+
+	private void broadcastPlayerLeaveMessage(Player player) {
+		var leaveMessage = new MessageOutput(MessageType.PLAYER_LEAVE, player.getName());
+		sink.tryEmitNext(leaveMessage);
+		log.info("Player {} left the room game {}", player.getName(), name);
+	}
 }

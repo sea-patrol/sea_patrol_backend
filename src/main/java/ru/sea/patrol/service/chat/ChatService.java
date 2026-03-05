@@ -2,6 +2,7 @@ package ru.sea.patrol.service.chat;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -16,11 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ChatService {
 
   private static final String GLOBAL_CHAT_GROUP = "global";
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper;
 
   // Groups: "global", "group:123", "user:alice"
   private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();

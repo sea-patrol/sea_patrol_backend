@@ -6,17 +6,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
-import ru.sea.patrol.ws.protocol.MessageType;
-import ru.sea.patrol.ws.protocol.dto.MessageInput;
-import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameService;
+import ru.sea.patrol.ws.game.GameWebSocketHandler;
+import ru.sea.patrol.ws.protocol.MessageType;
+import ru.sea.patrol.ws.protocol.dto.MessageInput;
+import tools.jackson.databind.ObjectMapper;
 
 class WsProtocolParsingTest {
 
 	@Test
 	void parseMessage_parsesArrayTypeAndPayload() {
-		GameWebSocketHandler handler = new GameWebSocketHandler(new ChatService(), new GameService());
+		GameWebSocketHandler handler = newHandler();
 
 		MessageInput input = invokeParseMessage(handler, """
 				["PLAYER_INPUT", {"left": false, "right": true, "up": true, "down": false}]
@@ -30,7 +31,7 @@ class WsProtocolParsingTest {
 
 	@Test
 	void parseMessage_parsesStringPayload() {
-		GameWebSocketHandler handler = new GameWebSocketHandler(new ChatService(), new GameService());
+		GameWebSocketHandler handler = newHandler();
 
 		MessageInput input = invokeParseMessage(handler, """
 				["CHAT_JOIN", "group:party-1"]
@@ -42,7 +43,7 @@ class WsProtocolParsingTest {
 
 	@Test
 	void parseMessage_rejectsEmptyMessage() {
-		GameWebSocketHandler handler = new GameWebSocketHandler(new ChatService(), new GameService());
+		GameWebSocketHandler handler = newHandler();
 
 		assertThatThrownBy(() -> invokeParseMessage(handler, "  "))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -51,11 +52,20 @@ class WsProtocolParsingTest {
 
 	@Test
 	void parseMessage_rejectsNonArrayFormat() {
-		GameWebSocketHandler handler = new GameWebSocketHandler(new ChatService(), new GameService());
+		GameWebSocketHandler handler = newHandler();
 
 		assertThatThrownBy(() -> invokeParseMessage(handler, "{\"type\":\"PLAYER_INPUT\"}"))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("Invalid message format");
+	}
+
+	private static GameWebSocketHandler newHandler() {
+		ObjectMapper objectMapper = new ObjectMapper();
+		return new GameWebSocketHandler(
+				new ChatService(objectMapper),
+				new GameService(objectMapper),
+				objectMapper
+		);
 	}
 
 	private static MessageInput invokeParseMessage(GameWebSocketHandler handler, String json) {

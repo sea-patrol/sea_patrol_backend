@@ -33,7 +33,7 @@ class GameRoomPhysicsTest {
 		Player player = createPlayer("p1");
 		room.join(player);
 
-		CompletableFuture<MessageOutput> firstFuture = room.getSink().asFlux().next().toFuture();
+		CompletableFuture<MessageOutput> firstFuture = player.getSink().asFlux().next().toFuture();
 
 		room.start(false);
 		try {
@@ -102,3 +102,4 @@ class GameRoomPhysicsTest {
 				.setLength(26f);
 	}
 }
+

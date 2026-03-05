@@ -20,7 +20,7 @@ class ChatServiceTest {
 
 	@Test
 	void initialize_emitsSystemJoinMessage() {
-		ChatService chatService = new ChatService();
+		ChatService chatService = new ChatService(objectMapper);
 
 		Flux<ChatMessage> aliceMessages = chatMessages(chatService.initialize("alice"));
 
@@ -33,7 +33,7 @@ class ChatServiceTest {
 
 	@Test
 	void globalMessage_isDeliveredToAllUsers() {
-		ChatService chatService = new ChatService();
+		ChatService chatService = new ChatService(objectMapper);
 
 		Flux<ChatMessage> alice = chatMessages(chatService.initialize("alice"));
 		Flux<ChatMessage> bob = chatMessages(chatService.initialize("bob"));
@@ -52,7 +52,7 @@ class ChatServiceTest {
 
 	@Test
 	void directMessage_isDeliveredToRecipient_andCopiedToSender() {
-		ChatService chatService = new ChatService();
+		ChatService chatService = new ChatService(objectMapper);
 
 		Flux<ChatMessage> alice = chatMessages(chatService.initialize("alice"));
 		Flux<ChatMessage> bob = chatMessages(chatService.initialize("bob"));
@@ -73,7 +73,7 @@ class ChatServiceTest {
 
 	@Test
 	void groupMessage_isDeliveredOnlyToJoinedUsers() {
-		ChatService chatService = new ChatService();
+		ChatService chatService = new ChatService(objectMapper);
 
 		Flux<ChatMessage> alice = chatMessages(chatService.initialize("alice"));
 		Flux<ChatMessage> bob = chatMessages(chatService.initialize("bob"));
@@ -102,3 +102,4 @@ class ChatServiceTest {
 				.map(o -> (ChatMessage) o.getPayload());
 	}
 }
+
