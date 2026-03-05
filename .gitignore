@@ -37,5 +37,8 @@ out/
 ### VS Code ###
 .vscode/
 
-raw
+raw/*
+!raw/refactor.md
+!raw/cdxtsk-*.md
+raw/logs/
 *.log
