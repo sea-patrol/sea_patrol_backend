@@ -14,7 +14,7 @@
 
 ## 2. Технологический стек
 - Язык: `Java 25` (toolchain в Gradle).
-- Framework: `Spring Boot 3.5.11`.
+- Framework: `Spring Boot 4.0.3`.
 - Web: `spring-boot-starter-webflux`.
 - Security: `spring-boot-starter-security`, JWT на `jjwt 0.9.1`.
 - Mapping: `MapStruct 1.6.3`.

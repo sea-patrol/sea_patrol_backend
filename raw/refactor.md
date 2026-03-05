@@ -309,7 +309,7 @@ ru.sea.patrol
 
 ## 3) Переход на Spring Boot 4
 
-Текущее состояние: `org.springframework.boot` **3.5.6** (`build.gradle.kts`), Gradle wrapper **8.14.3**, Java toolchain **25**.
+Текущее состояние: `org.springframework.boot` **4.0.2** (`build.gradle.kts`), Gradle wrapper **8.14.3**, Java toolchain **25**.
 
 > Важно: Spring Boot 4 документация рекомендует использовать Java SDK **17+** и при апгрейде опираться на release notes и `spring-boot-properties-migrator` на время миграции.
 
