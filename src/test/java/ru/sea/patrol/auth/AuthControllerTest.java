@@ -210,4 +210,44 @@ class AuthControllerTest {
 				.expectBody()
 				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_USERNAME");
 	}
+
+	@Test
+	void signup_invalidEmail_returns400_withValidationError() {
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "user_ok",
+						  "password": "123456",
+						  "email": "not-an-email"
+						}
+						""")
+				.exchange()
+				.expectStatus().isBadRequest()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR");
+	}
+
+	@Test
+	void login_blankFields_returns400_withValidationError() {
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "username": "",
+						  "password": ""
+						}
+						""")
+				.exchange()
+				.expectStatus().isBadRequest()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR");
+	}
+
 }
