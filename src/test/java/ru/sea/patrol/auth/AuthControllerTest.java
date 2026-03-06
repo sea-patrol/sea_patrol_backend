@@ -43,7 +43,7 @@ class AuthControllerTest {
 	}
 
 	@Test
-	void signup_createsUser_andReturnsUsername() {
+	void signup_createsUser_andReturnsCanonicalPayload() {
 		String username = "test_" + UUID.randomUUID();
 
 		webTestClient
@@ -61,11 +61,13 @@ class AuthControllerTest {
 				.expectStatus().isOk()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.username").isEqualTo(username);
+				.jsonPath("$.username").isEqualTo(username)
+				.jsonPath("$.id").doesNotExist()
+				.jsonPath("$.email").doesNotExist();
 	}
 
 	@Test
-	void login_returnsToken_andTimestamps_forExistingUser() {
+	void login_returnsCanonicalPayload_forExistingUser() {
 		webTestClient
 				.post()
 				.uri("/api/v1/auth/login")
@@ -84,16 +86,22 @@ class AuthControllerTest {
 				.jsonPath("$.username").isEqualTo("user1")
 				.jsonPath("$.token").isNotEmpty()
 				.jsonPath("$.issuedAt").isNotEmpty()
-				.jsonPath("$.expiresAt").isNotEmpty();
+				.jsonPath("$.expiresAt").isNotEmpty()
+				.jsonPath("$.userId").doesNotExist();
 	}
 
 	@Test
-	void me_withoutToken_returns401() {
+	void me_withoutToken_returns401_withStructuredUnauthorizedError() {
 		webTestClient
 				.get()
 				.uri("/api/v1/auth/me")
 				.exchange()
-				.expectStatus().isUnauthorized();
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED")
+				.jsonPath("$.errors[0].message").isEqualTo("Unauthorized");
 	}
 
 	@Test
@@ -106,7 +114,9 @@ class AuthControllerTest {
 				.expectStatus().isUnauthorized()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED")
+				.jsonPath("$.errors[0].message").isEqualTo("Unauthorized");
 	}
 
 	@Test
@@ -119,7 +129,9 @@ class AuthControllerTest {
 				.expectStatus().isUnauthorized()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED")
+				.jsonPath("$.errors[0].message").isEqualTo("Unauthorized");
 	}
 
 	@Test
@@ -170,11 +182,12 @@ class AuthControllerTest {
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
 				.jsonPath("$.username").isEqualTo(username)
-				.jsonPath("$.token").isNotEmpty();
+				.jsonPath("$.token").isNotEmpty()
+				.jsonPath("$.userId").doesNotExist();
 	}
 
 	@Test
-	void login_invalidPassword_returns401_withErrorCode() {
+	void login_invalidPassword_returns401_withStructuredError() {
 		webTestClient
 				.post()
 				.uri("/api/v1/auth/login")
@@ -189,11 +202,13 @@ class AuthControllerTest {
 				.expectStatus().isUnauthorized()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_PASSWORD");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_PASSWORD")
+				.jsonPath("$.errors[0].message").isEqualTo("Invalid password");
 	}
 
 	@Test
-	void login_invalidUsername_returns401_withErrorCode() {
+	void login_invalidUsername_returns401_withStructuredError() {
 		webTestClient
 				.post()
 				.uri("/api/v1/auth/login")
@@ -208,7 +223,9 @@ class AuthControllerTest {
 				.expectStatus().isUnauthorized()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_USERNAME");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_INVALID_USERNAME")
+				.jsonPath("$.errors[0].message").isEqualTo("Invalid username");
 	}
 
 	@Test
@@ -228,7 +245,9 @@ class AuthControllerTest {
 				.expectStatus().isBadRequest()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR")
+				.jsonPath("$.errors[0].message").isNotEmpty();
 	}
 
 	@Test
@@ -247,7 +266,8 @@ class AuthControllerTest {
 				.expectStatus().isBadRequest()
 				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 				.expectBody()
-				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR");
+				.jsonPath("$.errors").isArray()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_VALIDATION_ERROR")
+				.jsonPath("$.errors[0].message").isNotEmpty();
 	}
-
 }

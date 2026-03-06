@@ -16,20 +16,22 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 
 @Component
 public class AppErrorWebExceptionHandler extends AbstractErrorWebExceptionHandler {
-    public AppErrorWebExceptionHandler(AppErrorAttributes g, ApplicationContext applicationContext, ServerCodecConfigurer serverCodecConfigurer) {
-        super(g, new WebProperties.Resources(), applicationContext);
-        super.setMessageWriters(serverCodecConfigurer.getWriters());
-        super.setMessageReaders(serverCodecConfigurer.getReaders());
-    }
 
-    @Override
-    protected RouterFunction<ServerResponse> getRoutingFunction(final ErrorAttributes errorAttributes) {
-        return RouterFunctions.route(RequestPredicates.all(), request -> {
-            var props = getErrorAttributes(request, ErrorAttributeOptions.defaults());
+	public AppErrorWebExceptionHandler(AppErrorAttributes errorAttributes,
+	                                   ApplicationContext applicationContext,
+	                                   ServerCodecConfigurer serverCodecConfigurer) {
+		super(errorAttributes, new WebProperties.Resources(), applicationContext);
+		super.setMessageWriters(serverCodecConfigurer.getWriters());
+		super.setMessageReaders(serverCodecConfigurer.getReaders());
+	}
 
-            return ServerResponse.status(Integer.parseInt(props.getOrDefault("status", 500).toString()))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(BodyInserters.fromValue(props.get("errors")));
-        });
-    }
+	@Override
+	protected RouterFunction<ServerResponse> getRoutingFunction(final ErrorAttributes errorAttributes) {
+		return RouterFunctions.route(RequestPredicates.all(), request -> {
+			var props = getErrorAttributes(request, ErrorAttributeOptions.defaults());
+			return ServerResponse.status(Integer.parseInt(props.getOrDefault("status", 500).toString()))
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(BodyInserters.fromValue(props.get("errors")));
+		});
+	}
 }

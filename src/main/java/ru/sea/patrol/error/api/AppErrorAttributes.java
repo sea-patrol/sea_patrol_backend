@@ -2,8 +2,6 @@ package ru.sea.patrol.error.api;
 
 import jakarta.validation.ConstraintViolationException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.boot.web.error.ErrorAttributeOptions;
 import org.springframework.boot.webflux.error.DefaultErrorAttributes;
@@ -25,73 +23,59 @@ public class AppErrorAttributes extends DefaultErrorAttributes {
 	private static final String CODE_VALIDATION_ERROR = "SEAPATROL_VALIDATION_ERROR";
 	private static final String CODE_BAD_REQUEST = "SEAPATROL_BAD_REQUEST";
 
-	public AppErrorAttributes() {
-		super();
-	}
-
 	@Override
 	public Map<String, Object> getErrorAttributes(ServerRequest request, ErrorAttributeOptions options) {
 		var errorAttributes = super.getErrorAttributes(request, ErrorAttributeOptions.defaults());
 		Throwable error = getError(request);
 
 		HttpStatus status;
-		var errorList = new ArrayList<Map<String, Object>>();
+		var errors = new ArrayList<ApiError>();
 
-		if (error instanceof AuthException || error instanceof UnauthorizedException) {
+		if (error instanceof AuthException authException) {
 			status = HttpStatus.UNAUTHORIZED;
-			ApiException api = (ApiException) error;
-			errorList.add(errorMap(api.getErrorCode(), api.getMessage()));
-		} else if (error instanceof ApiException api) {
+			errors.add(new ApiError(authException.getErrorCode(), authException.getMessage()));
+		} else if (error instanceof UnauthorizedException unauthorizedException) {
+			status = HttpStatus.UNAUTHORIZED;
+			errors.add(new ApiError(unauthorizedException.getErrorCode(), unauthorizedException.getMessage()));
+		} else if (error instanceof ApiException apiException) {
 			status = HttpStatus.BAD_REQUEST;
-			errorList.add(errorMap(api.getErrorCode(), api.getMessage()));
+			errors.add(new ApiError(apiException.getErrorCode(), apiException.getMessage()));
 		} else if (error instanceof WebExchangeBindException bindException) {
 			status = HttpStatus.BAD_REQUEST;
-
 			for (FieldError fieldError : bindException.getFieldErrors()) {
-				String msg = "%s: %s".formatted(fieldError.getField(), safeMessage(fieldError.getDefaultMessage()));
-				errorList.add(errorMap(CODE_VALIDATION_ERROR, msg));
+				String message = "%s: %s".formatted(fieldError.getField(), safeMessage(fieldError.getDefaultMessage()));
+				errors.add(new ApiError(CODE_VALIDATION_ERROR, message));
 			}
 			for (ObjectError objectError : bindException.getGlobalErrors()) {
-				String msg = safeMessage(objectError.getDefaultMessage());
-				errorList.add(errorMap(CODE_VALIDATION_ERROR, msg));
+				errors.add(new ApiError(CODE_VALIDATION_ERROR, safeMessage(objectError.getDefaultMessage())));
 			}
-			if (errorList.isEmpty()) {
-				errorList.add(errorMap(CODE_VALIDATION_ERROR, "Validation failed"));
+			if (errors.isEmpty()) {
+				errors.add(new ApiError(CODE_VALIDATION_ERROR, "Validation failed"));
 			}
 		} else if (error instanceof ConstraintViolationException violationException) {
 			status = HttpStatus.BAD_REQUEST;
-			violationException.getConstraintViolations().forEach(v -> {
-				String msg = "%s: %s".formatted(v.getPropertyPath(), safeMessage(v.getMessage()));
-				errorList.add(errorMap(CODE_VALIDATION_ERROR, msg));
+			violationException.getConstraintViolations().forEach(violation -> {
+				String message = "%s: %s".formatted(violation.getPropertyPath(), safeMessage(violation.getMessage()));
+				errors.add(new ApiError(CODE_VALIDATION_ERROR, message));
 			});
-			if (errorList.isEmpty()) {
-				errorList.add(errorMap(CODE_VALIDATION_ERROR, "Validation failed"));
+			if (errors.isEmpty()) {
+				errors.add(new ApiError(CODE_VALIDATION_ERROR, "Validation failed"));
 			}
 		} else if (error instanceof ServerWebInputException) {
 			status = HttpStatus.BAD_REQUEST;
-			errorList.add(errorMap(CODE_BAD_REQUEST, safeMessage(error.getMessage())));
+			errors.add(new ApiError(CODE_BAD_REQUEST, safeMessage(error.getMessage())));
 		} else {
 			status = HttpStatus.INTERNAL_SERVER_ERROR;
 			String message = error.getMessage();
 			if (message == null) {
 				message = error.getClass().getName();
 			}
-			errorList.add(errorMap(CODE_INTERNAL_ERROR, message));
+			errors.add(new ApiError(CODE_INTERNAL_ERROR, message));
 		}
 
-		var errors = new HashMap<String, Object>();
-		errors.put("errors", errorList);
 		errorAttributes.put("status", status.value());
-		errorAttributes.put("errors", errors);
-
+		errorAttributes.put("errors", new ApiErrorResponse(errors));
 		return errorAttributes;
-	}
-
-	private static Map<String, Object> errorMap(String code, String message) {
-		var errorMap = new LinkedHashMap<String, Object>();
-		errorMap.put("code", code);
-		errorMap.put("message", message);
-		return errorMap;
 	}
 
 	private static String safeMessage(String message) {

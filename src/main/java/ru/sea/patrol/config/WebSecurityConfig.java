@@ -2,7 +2,6 @@ package ru.sea.patrol.config;
 
 import tools.jackson.databind.ObjectMapper;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +24,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.auth.security.JwtAuthenticationConverter;
 import ru.sea.patrol.auth.security.ReactiveSecurityManager;
+import ru.sea.patrol.error.api.ApiErrorResponse;
 
 @Slf4j
 @Configuration
@@ -62,12 +62,10 @@ public class WebSecurityConfig {
 				.authorizeExchange(exchanges -> exchanges
 						.pathMatchers(HttpMethod.OPTIONS).permitAll()
 						.pathMatchers(publicRoutes).permitAll()
-						.anyExchange().authenticated()
-				)
+						.anyExchange().authenticated())
 				.exceptionHandling(exceptionHandling -> exceptionHandling
 						.authenticationEntryPoint(this::handleAuthenticationError)
-						.accessDeniedHandler(this::handleAccessDeniedError)
-				)
+						.accessDeniedHandler(this::handleAccessDeniedError))
 				.addFilterAt(
 						bearerAuthenticationFilter(securityManager, bearerTokenServerAuthenticationConverter),
 						SecurityWebFiltersOrder.AUTHENTICATION)
@@ -92,17 +90,9 @@ public class WebSecurityConfig {
 		exchange.getResponse().setStatusCode(status);
 		exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
-		var payload = Map.of(
-				"errors",
-				List.of(Map.of(
-						"code", code,
-						"message", message
-				))
-		);
-
 		byte[] bytes;
 		try {
-			bytes = objectMapper.writeValueAsBytes(payload);
+			bytes = objectMapper.writeValueAsBytes(ApiErrorResponse.of(code, message));
 		} catch (Exception ex) {
 			log.error("Failed to serialize security error payload", ex);
 			return exchange.getResponse().setComplete();
@@ -118,12 +108,10 @@ public class WebSecurityConfig {
 	) {
 		AuthenticationWebFilter bearerAuthenticationFilter = new AuthenticationWebFilter(securityManager);
 		bearerAuthenticationFilter.setServerAuthenticationConverter(bearerTokenServerAuthenticationConverter);
-		bearerAuthenticationFilter.setAuthenticationFailureHandler((webFilterExchange, exception) -> handleAuthenticationError(webFilterExchange.getExchange(), exception));
+		bearerAuthenticationFilter.setAuthenticationFailureHandler((webFilterExchange, exception) ->
+				handleAuthenticationError(webFilterExchange.getExchange(), exception));
 		bearerAuthenticationFilter.setRequiresAuthenticationMatcher(ServerWebExchangeMatchers.pathMatchers("/**"));
 
 		return bearerAuthenticationFilter;
 	}
 }
-
-
-
