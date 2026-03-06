@@ -10,7 +10,7 @@ class GameRoomLifecycleTest {
 
 	@Test
 	void leave_lastPlayer_stopsRoom() {
-		GameRoom room = new GameRoom("test-room");
+		GameRoom room = new GameRoom("test-room", 100L);
 		Player player = new Player("alice")
 				.setModel("model")
 				.setMaxHealth(500)
@@ -35,4 +35,3 @@ class GameRoomLifecycleTest {
 		assertThat(room.getWorld()).isNull();
 	}
 }
-

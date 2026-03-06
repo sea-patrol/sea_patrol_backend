@@ -7,3 +7,11 @@ jwt:
   secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   expiration: 3600
   issuer: seapatrol-test
+
+game:
+  room:
+    default-room-name: main
+    update-period: 100ms
+    max-rooms: 5
+    max-players-per-room: 100
+    reconnect-grace-period: 30s

@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import ru.sea.patrol.service.chat.ChatService;
+import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.GameService;
 import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.ws.protocol.MessageType;
@@ -61,9 +63,16 @@ class WsProtocolParsingTest {
 
 	private static GameWebSocketHandler newHandler() {
 		ObjectMapper objectMapper = new ObjectMapper();
+		GameRoomProperties roomProperties = new GameRoomProperties(
+				"main",
+				5,
+				100,
+				Duration.ofMillis(100),
+				Duration.ofSeconds(30)
+		);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper),
-				new GameService(objectMapper),
+				new GameService(objectMapper, roomProperties),
 				objectMapper
 		);
 	}

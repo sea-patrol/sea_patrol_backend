@@ -1,7 +1,9 @@
 package ru.sea.patrol.service.game;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,10 +13,8 @@ import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
-
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameService {
 
   private final ObjectMapper objectMapper;
+  private final GameRoomProperties roomProperties;
   private final Random random = new Random();
 
   private final Map<String, Player> players = new ConcurrentHashMap<>();
@@ -41,6 +42,26 @@ public class GameService {
     }
   }
 
+  public String getDefaultRoomName() {
+    return roomProperties.defaultRoomName();
+  }
+
+  public int getMaxRooms() {
+    return roomProperties.maxRooms();
+  }
+
+  public int getMaxPlayersPerRoom() {
+    return roomProperties.maxPlayersPerRoom();
+  }
+
+  public Duration getReconnectGracePeriod() {
+    return roomProperties.reconnectGracePeriod();
+  }
+
+  public long getRoomUpdatePeriodMillis() {
+    return roomProperties.updatePeriod().toMillis();
+  }
+
   private Mono<Void> handlePlayerInput(String username, JsonNode payload) {
     try {
       PlayerInputMessage msg = objectMapper.treeToValue(payload, PlayerInputMessage.class);
@@ -56,14 +77,14 @@ public class GameService {
   }
 
   public void startRoom(String roomName) {
-    var room = rooms.computeIfAbsent(roomName, GameRoom::new);
+    var room = rooms.computeIfAbsent(roomName, this::createRoom);
     if (!room.isStarted()) {
       room.start();
     }
   }
   
   public void joinRoom(String playerName, String roomName) {
-    var room = rooms.computeIfAbsent(roomName, GameRoom::new);
+    var room = rooms.computeIfAbsent(roomName, this::createRoom);
     room.join(retrievePlayer(playerName));
   }
   
@@ -84,6 +105,10 @@ public class GameService {
     if (player != null && player.getRoom() != null) {
       leaveRoom(playerName, player.getRoom().getName());
     }
+  }
+
+  private GameRoom createRoom(String roomName) {
+    return new GameRoom(roomName, roomProperties.updatePeriod().toMillis());
   }
 
   private Player retrievePlayer(String playerName) {

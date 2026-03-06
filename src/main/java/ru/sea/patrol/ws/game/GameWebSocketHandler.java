@@ -39,8 +39,9 @@ public class GameWebSocketHandler implements WebSocketHandler {
 					Flux<WebSocketMessage> gameFlux = gameService.initialize(username)
 							.map(message -> createWebSocketMessage(message, session));
 
-					gameService.joinRoom(username, "main");
-					gameService.startRoom("main");
+					String defaultRoomName = gameService.getDefaultRoomName();
+					gameService.joinRoom(username, defaultRoomName);
+					gameService.startRoom(defaultRoomName);
 
 					Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux);
 

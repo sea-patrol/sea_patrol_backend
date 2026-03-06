@@ -25,14 +25,13 @@
 ## 3. Структура репозитория
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
-- `src/main/java/ru/sea/patrol/controller` — отдача SPA (`/`, `/game`).
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
-- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, room config properties, цикл обновления, игроки.
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
-- `src/main/resources/application.yaml` — конфиг приложения и JWT.
+- `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
 - `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
@@ -51,20 +50,32 @@
 - При подключении пользователя:
   - инициализируется чат-поток;
   - инициализируется игровой поток;
-  - пользователь помещается в комнату `main`;
+  - пользователь помещается в default room из `game.room.default-room-name`;
   - при первом подключении запускается игровой цикл комнаты.
-- Частота обновлений комнаты: каждые ~100 мс (`ScheduledExecutorService`).
+- Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
+- Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
+  - `max-rooms`;
+  - `max-players-per-room`;
+  - `reconnect-grace-period`.
 
 ## 5. Доменные ограничения (текущее состояние)
 - Пользователи и игровые сущности хранятся в памяти процесса.
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
+- `maxRooms`, `maxPlayersPerRoom` и reconnect grace уже конфигурируются, но полный lifecycle/registry enforcement ещё будет реализован отдельными backend tasks.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):
   - `JWT_SECRET` — raw строка (рекомендуется >= 32 байта);
   - `JWT_SECRET_BASE64` — base64/base64url-байты (после декодирования >= 32 байта).
+
+- Room runtime defaults можно переопределить через env:
+  - `GAME_DEFAULT_ROOM_NAME`
+  - `GAME_ROOM_UPDATE_PERIOD`
+  - `GAME_MAX_ROOMS`
+  - `GAME_MAX_PLAYERS_PER_ROOM`
+  - `GAME_RECONNECT_GRACE_PERIOD`
 
 - Windows:
   - `.\gradlew.bat bootRun`
@@ -79,3 +90,4 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
+- Комнаты пока создаются через in-memory `computeIfAbsent`; полноценный `RoomRegistry` и enforcement room limits ещё не реализованы.

@@ -25,8 +25,6 @@ import ru.sea.patrol.ws.protocol.dto.WindInfo;
 @Slf4j
 public class GameRoom {
 
-	private static final long DEFAULT_UPDATE_PERIOD_MILLIS = 100L;
-
 	@Getter
 	private final String name;
 
@@ -48,13 +46,13 @@ public class GameRoom {
 	@Getter
 	private volatile boolean started = false;
 
+	@Getter
 	private final long updatePeriodMillis;
 
-	public GameRoom(String name) {
-		this(name, DEFAULT_UPDATE_PERIOD_MILLIS);
-	}
-
 	public GameRoom(String name, long updatePeriodMillis) {
+		if (updatePeriodMillis <= 0) {
+			throw new IllegalArgumentException("updatePeriodMillis must be greater than zero");
+		}
 		this.name = name;
 		this.updatePeriodMillis = updatePeriodMillis;
 		// Best-effort: drop messages for slow subscribers instead of unbounded buffering.

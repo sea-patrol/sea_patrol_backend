@@ -11,11 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import ru.sea.patrol.service.game.GameRoom;
+import ru.sea.patrol.service.game.Player;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.InitGameStateMessage;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
-import ru.sea.patrol.service.game.GameRoom;
-import ru.sea.patrol.service.game.Player;
 
 @Tag("physics")
 @Execution(ExecutionMode.SAME_THREAD)
@@ -29,7 +29,7 @@ class GameRoomPhysicsTest {
 
 	@Test
 	void start_withoutScheduler_createsWorld_andEmitsInitMessage() throws Exception {
-		GameRoom room = new GameRoom("test-room");
+		GameRoom room = new GameRoom("test-room", 100L);
 		Player player = createPlayer("p1");
 		room.join(player);
 
@@ -58,7 +58,7 @@ class GameRoomPhysicsTest {
 
 	@Test
 	void update_withoutScheduler_doesNotThrow() {
-		GameRoom room = new GameRoom("test-room");
+		GameRoom room = new GameRoom("test-room", 100L);
 		room.join(createPlayer("p1"));
 		room.start(false);
 
@@ -77,7 +77,7 @@ class GameRoomPhysicsTest {
 	@Test
 	void startStop_multipleCycles_staysStable() {
 		for (int i = 0; i < 3; i++) {
-			GameRoom room = new GameRoom("room-" + i);
+			GameRoom room = new GameRoom("room-" + i, 100L);
 			room.join(createPlayer("p" + i));
 			room.start(false);
 			room.update();
@@ -102,4 +102,3 @@ class GameRoomPhysicsTest {
 				.setLength(26f);
 	}
 }
-
