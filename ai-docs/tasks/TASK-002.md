@@ -101,7 +101,7 @@
 5. `sea_patrol_backend/src/main/java/ru/sea/patrol/error/api/AppErrorWebExceptionHandler.java` - сериализация общего envelope
 6. `sea_patrol_backend/src/main/java/ru/sea/patrol/error/api/ValidationErrorHandler.java` - validation errors переведены на общий envelope
 7. `sea_patrol_backend/src/test/java/ru/sea/patrol/auth/AuthControllerTest.java` - усилены проверки success/failure contract
-8. `sea_patrol_backend/ai-docs/todo/TASK-002.md` - backend task artifact
+8. `sea_patrol_backend/ai-docs/tasks/TASK-002.md` - backend task artifact
 
 ### Незапланированные находки
 - Реальный формат auth errors уже был близок к канонике, но не был жёстко зафиксирован едиными DTO.
@@ -129,3 +129,4 @@
 
 ## Ссылки
 - Related docs: `sea_patrol_orchestration/API.md`, `sea_patrol_backend/ai-docs/API_INFO.md`
+

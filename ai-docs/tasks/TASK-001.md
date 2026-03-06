@@ -57,7 +57,7 @@
 
 ## Предпосылки и зависимости
 - Backend часть `TASK-001` должна быть завершена до `TASK-002`, потому что `TASK-002` уже меняет backend behavior/tests.
-- Frontend часть shared-задачи оформляется отдельно в `sea_patrol_frontend/ai-docs/todo/TASK-001.md`.
+- Frontend часть shared-задачи оформляется отдельно в `sea_patrol_frontend/ai-docs/tasks/TASK-001.md`.
 
 ## Технический подход
 Для backend repo каноника фиксируется по ближайшему уровню истины: коду и тестам. Это означает, что backend docs должны описывать именно текущий response/error format, а не старые frontend ожидания. Если проект позже решит перейти на `201 Created` или `409`, это уже отдельное изменение backend behavior, а не часть базовой документарной фиксации.
@@ -65,7 +65,7 @@
 ## Изменения по репозиторию
 ### `sea_patrol_backend`
 - [x] Обновить `ai-docs/API_INFO.md`
-- [x] Создать `ai-docs/todo/TASK-001.md`
+- [x] Создать `ai-docs/tasks/TASK-001.md`
 - [ ] Обновить `ai-docs/PROJECT_INFO.md` при необходимости
 - [ ] Добавить или обновить тесты
 
@@ -111,7 +111,7 @@
 
 ## Реализация
 ### Измененные файлы
-1. `sea_patrol_backend/ai-docs/todo/TASK-001.md` - backend-specific описание shared задачи
+1. `sea_patrol_backend/ai-docs/tasks/TASK-001.md` - backend-specific описание shared задачи
 2. `sea_patrol_backend/ai-docs/API_INFO.md` - backend auth docs выровнены по фактическому contract
 
 ### Незапланированные находки
@@ -141,3 +141,4 @@
 
 ## Ссылки
 - Related docs: `sea_patrol_backend/ai-docs/API_INFO.md`, `sea_patrol_orchestration/API.md`
+
