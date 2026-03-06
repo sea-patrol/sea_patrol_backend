@@ -43,7 +43,8 @@ Response `200 OK`:
 - Пароль хешируется `BCrypt`.
 - Роль проставляется как `USER`.
 - Признак `locked=false`.
-- Сейчас нет проверки уникальности username и нет явной валидации DTO через `@Valid`.
+- DTO валидируется через `@Valid` и jakarta validation annotations.
+- Сейчас нет проверки уникальности username: in-memory repository использует `username` как ключ и при повторном signup перезаписывает запись.
 
 ### 3.2 `POST /api/v1/auth/login`
 Аутентифицирует пользователя и возвращает JWT.
@@ -65,6 +66,10 @@ Response `200 OK`:
   "expiresAt": "2026-03-04T12:00:00.000+00:00"
 }
 ```
+
+Примечания:
+- `userId` не входит в текущий backend response contract.
+- `username`, `token`, `issuedAt`, `expiresAt` покрыты integration tests.
 
 Ошибки логина (через `AuthException`):
 - `SEAPATROL_INVALID_USERNAME`
@@ -260,3 +265,5 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
