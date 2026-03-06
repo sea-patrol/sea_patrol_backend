@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
@@ -12,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameService;
+import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
@@ -27,12 +29,20 @@ public class GameWebSocketHandler implements WebSocketHandler {
 	private final ChatService chatService;
 	private final GameService gameService;
 	private final ObjectMapper objectMapper;
+	private final GameSessionRegistry sessionRegistry;
 
 	@Override
 	public Mono<Void> handle(WebSocketSession session) {
 		return ReactiveSecurityContextHolder.getContext()
 				.map(securityContext -> securityContext.getAuthentication().getName())
 				.flatMap(username -> {
+					String sessionId = session.getId();
+					var claimResult = sessionRegistry.claimSession(username, sessionId);
+					if (claimResult == GameSessionRegistry.ClaimResult.REJECTED_DUPLICATE) {
+						log.warn("Rejected duplicate WebSocket session for user {}", username);
+						return session.close(CloseStatus.POLICY_VIOLATION.withReason(GameSessionRegistry.DUPLICATE_SESSION_ERROR_CODE));
+					}
+
 					Flux<WebSocketMessage> chatFlux = chatService.initialize(username)
 							.map(message -> createWebSocketMessage(message, session));
 
@@ -69,6 +79,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
 						return Mono.fromRunnable(() -> {
 							chatService.cleanupUser(username);
 							gameService.cleanupPlayer(username);
+							sessionRegistry.registerDisconnect(username, sessionId);
 							log.info("Player {} disconnected", username);
 						});
 					});

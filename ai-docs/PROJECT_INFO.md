@@ -39,6 +39,7 @@
 ### 4.1 HTTP / Auth
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
+- Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
@@ -48,11 +49,15 @@
 ### 4.3 WebSocket / Игра
 - Endpoint: `/ws/game`.
 - При подключении пользователя:
+  - `GameSessionRegistry` захватывает ownership active game session по `username`;
+  - параллельное второе подключение для того же пользователя отклоняется `POLICY_VIOLATION`;
   - инициализируется чат-поток;
   - инициализируется игровой поток;
   - пользователь помещается в default room из `game.room.default-room-name`;
   - при первом подключении запускается игровой цикл комнаты.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
+- После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
+- Текущий reconnect grace влияет на admission policy, но еще не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
   - `max-players-per-room`;
@@ -63,7 +68,8 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms`, `maxPlayersPerRoom` и reconnect grace уже конфигурируются, но полный lifecycle/registry enforcement ещё будет реализован отдельными backend tasks.
+- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, но полноценный `RoomRegistry` и room admission flow еще будут реализованы отдельными backend tasks.
+- Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):
@@ -90,4 +96,10 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- Комнаты пока создаются через in-memory `computeIfAbsent`; полноценный `RoomRegistry` и enforcement room limits ещё не реализованы.
+- Комнаты пока создаются через in-memory `computeIfAbsent`; полноценный `RoomRegistry` и enforcement room limits еще не реализованы.
+- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
+
+
+
+
+

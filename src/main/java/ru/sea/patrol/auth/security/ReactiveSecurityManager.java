@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.error.domain.AuthException;
 import ru.sea.patrol.error.domain.UnauthorizedException;
+import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.user.service.UserService;
 
 @Component
@@ -16,6 +17,7 @@ public class ReactiveSecurityManager implements ReactiveAuthenticationManager {
     private final JwtUtil jwtService;
     private final UserService userService;
     private final CustomPasswordEncoder passwordEncoder;
+    private final GameSessionRegistry sessionRegistry;
 
     public Mono<TokenDetails> login(String username, String password) {
         return userService.retrieve(username)
@@ -26,6 +28,13 @@ public class ReactiveSecurityManager implements ReactiveAuthenticationManager {
 
                     if (!passwordEncoder.matches(password, user.getPassword())) {
                         return Mono.error(new AuthException("Invalid password", "SEAPATROL_INVALID_PASSWORD"));
+                    }
+
+                    if (!sessionRegistry.isLoginAllowed(username)) {
+                        return Mono.error(new AuthException(
+                                GameSessionRegistry.DUPLICATE_SESSION_MESSAGE,
+                                GameSessionRegistry.DUPLICATE_SESSION_ERROR_CODE
+                        ));
                     }
 
                     return Mono.just(jwtService.generateToken(user).toBuilder()

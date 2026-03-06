@@ -75,6 +75,7 @@ Response `200 OK`:
 - `SEAPATROL_INVALID_USERNAME`
 - `SEAPATROL_INVALID_PASSWORD`
 - `SEAPATROL_USER_ACCOUNT_DISABLED`
+- `SEAPATROL_DUPLICATE_SESSION` - если у пользователя уже есть активная игровая WebSocket-сессия
 
 ### 3.3 `GET /`
 Возвращает `static/index.html` (`text/html`).
@@ -84,6 +85,12 @@ Response `200 OK`:
 
 ## 4. WebSocket API (`/ws/game`)
 ## 4.1 Транспортный формат
+### Session policy
+- Backend допускает только одну активную игровую WebSocket-сессию на `username`.
+- Повторное параллельное подключение с тем же пользователем отклоняется закрытием `POLICY_VIOLATION` с reason, содержащим `SEAPATROL_DUPLICATE_SESSION`.
+- После disconnect username переходит в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новое WS-подключение разрешается.
+- Текущая реализация разрешает reconnect только на уровне session admission. Полный resume room state не входит в текущий контракт и будет отдельной задачей.
+
 ### Входящие сообщения от клиента
 Сервер ожидает массив:
 ```json
@@ -260,10 +267,14 @@ Payload:
 
 Важно:
 - Ошибки, обработанные напрямую security entry point/access denied handler, возвращают JSON в том же формате (например, `SEAPATROL_UNAUTHORIZED` / `SEAPATROL_FORBIDDEN`).
+- `SEAPATROL_DUPLICATE_SESSION` возвращается как `401` на `POST /api/v1/auth/login`, если у пользователя уже есть активная игровая WebSocket-сессия.
 
 ## 6. CORS (текущее значение)
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
+
 
 
