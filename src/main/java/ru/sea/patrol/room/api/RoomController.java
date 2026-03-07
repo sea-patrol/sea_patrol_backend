@@ -16,6 +16,7 @@ import ru.sea.patrol.room.api.dto.RoomCatalogResponseDto;
 import ru.sea.patrol.room.api.dto.RoomCreateRequestDto;
 import ru.sea.patrol.room.api.dto.RoomSummaryDto;
 import ru.sea.patrol.service.game.RoomCatalogService;
+import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomJoinService;
 import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
 
@@ -25,6 +26,7 @@ import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
 public class RoomController {
 
 	private final RoomCatalogService roomCatalogService;
+	private final RoomCatalogWsService roomCatalogWsService;
 	private final RoomJoinService roomJoinService;
 
 	@GetMapping
@@ -35,7 +37,11 @@ public class RoomController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public Mono<RoomSummaryDto> createRoom(@RequestBody RoomCreateRequestDto request) {
-		return Mono.fromSupplier(() -> roomCatalogService.createRoom(request));
+		return Mono.fromSupplier(() -> {
+			RoomSummaryDto createdRoom = roomCatalogService.createRoom(request);
+			roomCatalogWsService.publishRoomsUpdated();
+			return createdRoom;
+		});
 	}
 
 	@PostMapping("/{roomId}/join")

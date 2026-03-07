@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameService;
+import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
@@ -28,6 +29,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
 
 	private final ChatService chatService;
 	private final GameService gameService;
+	private final RoomCatalogWsService roomCatalogWsService;
 	private final ObjectMapper objectMapper;
 	private final GameSessionRegistry sessionRegistry;
 
@@ -47,7 +49,14 @@ public class GameWebSocketHandler implements WebSocketHandler {
 							.map(message -> createWebSocketMessage(message, session));
 					Flux<WebSocketMessage> gameFlux = gameService.initialize(username)
 							.map(message -> createWebSocketMessage(message, session));
-					Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux);
+					Flux<WebSocketMessage> roomCatalogFlux = Flux.concat(
+							Mono.defer(() -> sessionRegistry.hasActiveLobbySession(username)
+									? Mono.just(roomCatalogWsService.snapshotMessage())
+									: Mono.empty()),
+							roomCatalogWsService.initialize()
+									.filter(__ -> sessionRegistry.hasActiveLobbySession(username))
+					).map(message -> createWebSocketMessage(message, session));
+					Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux, roomCatalogFlux);
 
 					Flux<MessageInput> inbound = session.receive()
 							.map(WebSocketMessage::getPayloadAsText)
@@ -71,9 +80,12 @@ public class GameWebSocketHandler implements WebSocketHandler {
 							return Mono.empty();
 						}
 						return Mono.fromRunnable(() -> {
-							chatService.cleanupUser(username);
-							gameService.cleanupPlayer(username);
 							sessionRegistry.registerDisconnect(username, sessionId);
+							chatService.cleanupUser(username);
+							boolean roomCatalogChanged = gameService.cleanupPlayer(username);
+							if (roomCatalogChanged) {
+								roomCatalogWsService.publishRoomsUpdated();
+							}
 							log.info("Player {} disconnected", username);
 						});
 					});
@@ -127,4 +139,3 @@ public class GameWebSocketHandler implements WebSocketHandler {
 		}
 	}
 }
-

@@ -6,6 +6,8 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.GameService;
+import ru.sea.patrol.service.game.RoomCatalogService;
+import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 import ru.sea.patrol.service.game.RoomRegistryEntry;
 import ru.sea.patrol.service.session.GameSessionRegistry;
@@ -17,7 +19,9 @@ class GameRoomCleanupPolicyTest {
 	void cleanupPlayer_removesEmptyRoomImmediately_withoutReconnectGrace() {
 		GameRoomProperties properties = properties(Duration.ofSeconds(30));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
 		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry);
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 1", "caribbean-01", "Caribbean Sea");
 
@@ -32,7 +36,9 @@ class GameRoomCleanupPolicyTest {
 	void cleanupPlayer_keepsEmptyRoomWhileReconnectGraceExists_andRemovesAfterExpiration() throws Exception {
 		GameRoomProperties properties = properties(Duration.ofMillis(120));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
 		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry);
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 2", "caribbean-01", "Caribbean Sea");
 

@@ -43,7 +43,7 @@
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
 - `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются после того, как в них не остаётся активных игроков и завершается room-bound reconnect grace.
-- `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation.
+- `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation, после чего lobby WS-клиенты получают `ROOMS_UPDATED`.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
@@ -63,10 +63,11 @@
   - backend проверяет наличие активной lobby session;
   - проверяет существование комнаты и лимит `maxPlayersPerRoom`;
   - подготавливает игрока к join, переключает session binding на `roomId` и переносит chat membership из `group:lobby` в `group:room:<roomId>`;
+  - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
 - После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
-- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; после истечения окна пустая комната удаляется автоматически.
+- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; при disconnect lobby WS-клиенты получают `ROOMS_UPDATED` с уменьшенным `currentPlayers`, а после истечения окна — ещё один `ROOMS_UPDATED`, если комната была удалена автоматически.
 - Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
@@ -78,7 +79,7 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join flows.
+- `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
 - Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
 - Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
@@ -110,6 +111,7 @@
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
+
 
 
 

@@ -10,6 +10,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import ru.sea.patrol.service.game.GameRoomProperties;
+import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 
 @Service
@@ -21,12 +22,18 @@ public class GameSessionRegistry {
 	private final long reconnectGracePeriodMillis;
 	private final ScheduledExecutorService scheduler;
 	private final RoomRegistry roomRegistry;
+	private final RoomCatalogWsService roomCatalogWsService;
 	private final Map<String, SessionEntry> sessions = new ConcurrentHashMap<>();
 
-	public GameSessionRegistry(GameRoomProperties roomProperties, RoomRegistry roomRegistry) {
+	public GameSessionRegistry(
+			GameRoomProperties roomProperties,
+			RoomRegistry roomRegistry,
+			RoomCatalogWsService roomCatalogWsService
+	) {
 		this.reconnectGracePeriodMillis = roomProperties.reconnectGracePeriod().toMillis();
 		this.scheduler = Executors.newSingleThreadScheduledExecutor(sessionThreadFactory());
 		this.roomRegistry = roomRegistry;
+		this.roomCatalogWsService = roomCatalogWsService;
 	}
 
 	public synchronized boolean isLoginAllowed(String username) {
@@ -122,7 +129,9 @@ public class GameSessionRegistry {
 		if (hasReconnectGraceInRoom(roomId)) {
 			return;
 		}
-		roomRegistry.removeRoomIfEmpty(roomId);
+		if (roomRegistry.removeRoomIfEmpty(roomId)) {
+			roomCatalogWsService.publishRoomsUpdated();
+		}
 	}
 
 	private static void cancel(ScheduledFuture<?> future) {

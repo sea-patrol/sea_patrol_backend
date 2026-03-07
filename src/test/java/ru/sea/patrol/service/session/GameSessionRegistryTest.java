@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import ru.sea.patrol.service.game.GameRoomProperties;
+import ru.sea.patrol.service.game.RoomCatalogService;
+import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 
 class GameSessionRegistryTest {
@@ -20,7 +22,9 @@ class GameSessionRegistryTest {
 	}
 
 	private static GameSessionRegistry newRegistry(GameRoomProperties properties, RoomRegistry roomRegistry) {
-		return new GameSessionRegistry(properties, roomRegistry);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
+		return new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
 	}
 
 	@Test

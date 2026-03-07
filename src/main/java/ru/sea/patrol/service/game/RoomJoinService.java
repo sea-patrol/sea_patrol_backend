@@ -22,19 +22,22 @@ public class RoomJoinService {
 	private final GameSessionRegistry sessionRegistry;
 	private final GameService gameService;
 	private final ChatService chatService;
+	private final RoomCatalogWsService roomCatalogWsService;
 
 	public RoomJoinService(
 			RoomRegistry roomRegistry,
 			GameRoomProperties roomProperties,
 			GameSessionRegistry sessionRegistry,
 			GameService gameService,
-			ChatService chatService
+			ChatService chatService,
+			RoomCatalogWsService roomCatalogWsService
 	) {
 		this.roomRegistry = roomRegistry;
 		this.roomProperties = roomProperties;
 		this.sessionRegistry = sessionRegistry;
 		this.gameService = gameService;
 		this.chatService = chatService;
+		this.roomCatalogWsService = roomCatalogWsService;
 	}
 
 	public RoomJoinResponseDto joinRoom(String username, String roomId) {
@@ -55,6 +58,7 @@ public class RoomJoinService {
 			throw new ConflictException("Active lobby WebSocket session is required", ERROR_CODE_LOBBY_SESSION_REQUIRED);
 		}
 		chatService.moveUserToRoom(username, roomId);
+		roomCatalogWsService.publishRoomsUpdated();
 
 		RoomJoinResponseDto response = new RoomJoinResponseDto(
 				roomEntry.id(),

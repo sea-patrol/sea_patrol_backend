@@ -144,7 +144,8 @@ Response `201 Created`:
 - если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
 - если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
 - пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
-- если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`.
+- если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
+- после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам.
 
 Ошибки:
 - `400` -> `{ "errors": [{ "code": "INVALID_MAP_ID", "message": "Unknown mapId" }] }`
@@ -177,6 +178,7 @@ Response `200 OK`:
 - join невозможен без активной lobby WebSocket session для того же `username`;
 - backend проверяет существование комнаты и лимит `maxPlayersPerRoom`;
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
+- после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
 - текущий `SPAWN_ASSIGNED` использует временный authoritative placeholder spawn `(x=0.0, z=0.0, angle=0.0)` до отдельных задач по spawn logic.
 
@@ -194,7 +196,9 @@ Response `200 OK`:
 - Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
 - Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
 - После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
+- При lobby WebSocket-подключении backend автоматически отправляет `ROOMS_SNAPSHOT` с текущим room catalog.
 - До явного REST `POST /api/v1/rooms/{roomId}/join` пользователь не привязан к игровой комнате и не получает room stream.
+- Все live-изменения каталога (`create`, `join`, `leave`, cleanup`) публикуются как `ROOMS_UPDATED` полным snapshot payload без delta-патчей.
 
 ### Входящие сообщения от клиента
 Сервер ожидает массив:
@@ -227,6 +231,8 @@ Enum `MessageType`:
 - `CHAT_MESSAGE`
 - `CHAT_JOIN`
 - `CHAT_LEAVE`
+- `ROOMS_SNAPSHOT`
+- `ROOMS_UPDATED`
 - `PLAYER_INPUT`
 - `PLAYER_JOIN`
 - `PLAYER_LEAVE`
@@ -285,6 +291,33 @@ Payload (`ChatMessage`):
   "text": "..."
 }
 ```
+
+### `ROOMS_SNAPSHOT`
+Payload совпадает с `GET /api/v1/rooms`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": []
+}
+```
+
+Примечание:
+- отправляется автоматически при lobby WebSocket-подключении.
+
+### `ROOMS_UPDATED`
+Payload совпадает с `GET /api/v1/rooms`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": []
+}
+```
+
+Примечания:
+- публикуется для active lobby WebSocket-клиентов после `create`, `join`, `leave`, cleanup;
+- payload всегда является полным snapshot, а не delta-патчем.
 
 ### `ROOM_JOINED`
 Payload:
@@ -424,5 +457,6 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
 
 

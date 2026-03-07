@@ -91,22 +91,26 @@ public class GameService {
 		player.reply(message);
 	}
 
-	public void leaveRoom(String playerName, String roomName) {
+	public boolean leaveRoom(String playerName, String roomName) {
 		var room = roomRegistry.findRoom(roomName);
-		if (room != null) {
-			room.leave(playerName);
-			if (!sessionRegistry.hasReconnectGraceInRoom(roomName)) {
-				roomRegistry.removeRoomIfEmpty(roomName);
-			}
+		if (room == null) {
+			return false;
 		}
+		int beforeCount = room.getPlayerCount();
+		room.leave(playerName);
+		if (!sessionRegistry.hasReconnectGraceInRoom(roomName)) {
+			roomRegistry.removeRoomIfEmpty(roomName);
+		}
+		return room.getPlayerCount() != beforeCount || !roomRegistry.hasRoom(roomName);
 	}
 
-	public void cleanupPlayer(String playerName) {
+	public boolean cleanupPlayer(String playerName) {
 		log.info("Cleaning up player {}", playerName);
 		var player = players.remove(playerName);
 		if (player != null && player.getRoom() != null) {
-			leaveRoom(playerName, player.getRoom().getName());
+			return leaveRoom(playerName, player.getRoom().getName());
 		}
+		return false;
 	}
 
 	private Mono<Void> handlePlayerInput(String username, JsonNode payload) {
