@@ -26,6 +26,7 @@
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
+- `src/main/java/ru/sea/patrol/room` — REST room catalog (`GET /api/v1/rooms`).
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
@@ -36,14 +37,15 @@
 - `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
 ## 4. Runtime-потоки
-### 4.1 HTTP / Auth
+### 4.1 HTTP / REST
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
+- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
-- Остальные HTTP-маршруты требуют JWT в `Authorization: Bearer <token>`.
+- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, требуют JWT в `Authorization: Bearer <token>`.
 - Для WebSocket handshake (`GET /ws/...`) токен читается из query-параметра `token`.
 
 ### 4.3 WebSocket / Игра
@@ -68,7 +70,8 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, `RoomRegistry` уже выделен как отдельный lifecycle layer, но room admission flow и limits enforcement еще будут реализованы отдельными backend tasks.
+- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, `RoomRegistry` уже выделен как отдельный lifecycle layer, а `GET /api/v1/rooms` уже читает snapshot из него; room admission flow и limits enforcement еще будут реализованы отдельными backend tasks.
+- Room catalog пока отдает временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
 - Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
@@ -98,6 +101,8 @@
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - `RoomRegistry` уже управляет активными комнатами как отдельная абстракция, но max room limits и расширенный cleanup policy еще не реализованы.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
+
+
 
 
 

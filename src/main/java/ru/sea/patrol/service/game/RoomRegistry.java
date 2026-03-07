@@ -1,5 +1,7 @@
 package ru.sea.patrol.service.game;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
@@ -46,5 +48,9 @@ public class RoomRegistry {
 
   public synchronized boolean hasRoom(String roomName) {
     return rooms.containsKey(roomName);
+  }
+
+  public synchronized List<GameRoom> roomsSnapshot() {
+    return List.copyOf(new ArrayList<>(rooms.values()));
   }
 }

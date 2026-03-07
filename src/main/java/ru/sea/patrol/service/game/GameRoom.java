@@ -87,6 +87,10 @@ public class GameRoom {
 		return players.isEmpty();
 	}
 
+	public int getPlayerCount() {
+		return players.size();
+	}
+
 	public synchronized void start() {
 		start(true);
 	}
@@ -266,3 +270,4 @@ public class GameRoom {
 		log.info("Player {} left the room game {}", player.getName(), name);
 	}
 }
+

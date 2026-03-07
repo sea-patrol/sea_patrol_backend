@@ -1,0 +1,22 @@
+package ru.sea.patrol.room.api;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+import ru.sea.patrol.room.api.dto.RoomCatalogResponseDto;
+import ru.sea.patrol.service.game.RoomCatalogService;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/rooms")
+public class RoomController {
+
+	private final RoomCatalogService roomCatalogService;
+
+	@GetMapping
+	public Mono<RoomCatalogResponseDto> listRooms() {
+		return Mono.fromSupplier(roomCatalogService::getCatalog);
+	}
+}

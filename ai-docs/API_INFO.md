@@ -83,6 +83,37 @@ Response `200 OK`:
 ### 3.4 `GET /game`
 Возвращает `static/index.html` (`text/html`).
 
+### 3.5 `GET /api/v1/rooms`
+Возвращает текущий room catalog для lobby UI.
+
+Требует заголовок:
+- `Authorization: Bearer <jwt>`
+
+Response `200 OK`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": [
+    {
+      "id": "main",
+      "name": "main",
+      "mapId": "caribbean-01",
+      "mapName": "Caribbean Sea",
+      "currentPlayers": 1,
+      "maxPlayers": 100,
+      "status": "OPEN"
+    }
+  ]
+}
+```
+
+Примечания:
+- `rooms` может быть пустым массивом;
+- список комнат берётся из `RoomRegistry`;
+- комнаты сортируются по `id`/`name`;
+- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`.
+
 ## 4. WebSocket API (`/ws/game`)
 ## 4.1 Транспортный формат
 ### Session policy
@@ -273,6 +304,8 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
 
 
 
