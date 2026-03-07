@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.ChatMessage;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
@@ -19,17 +20,17 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class ChatService {
 
-	private static final String GLOBAL_CHAT_GROUP = "global";
+	private static final String USER_CHAT_PREFIX = "user:";
 	private static final String LOBBY_CHAT_GROUP = "group:lobby";
 	private static final String ROOM_CHAT_PREFIX = "group:room:";
 
 	private final ObjectMapper objectMapper;
+	private final GameSessionRegistry sessionRegistry;
 	private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();
 	private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
 
 	public Flux<MessageOutput> initialize(String username) {
 		var user = addUser(username);
-		userJoinChatMessage(user);
 		addUserToBaseGroups(user);
 		log.info("Player {} joined chat", username);
 		return user.getUserSink().asFlux()
@@ -47,7 +48,6 @@ public class ChatService {
 					removeGroupIfEmpty(group);
 				}
 			}
-			userLeaveChatMessage(user);
 			log.info("Player {} left chat", username);
 		}
 	}
@@ -76,11 +76,8 @@ public class ChatService {
 		switch (msg.getType()) {
 			case MessageType.CHAT_MESSAGE:
 				return handleChatMessage(username, msg.getPayload());
-			case MessageType.CHAT_JOIN:
-				joinToGroup(username, msg.getPayload().asText());
-				return Mono.empty();
-			case MessageType.CHAT_LEAVE:
-				leaveFromGroup(username, msg.getPayload().asText());
+			case MessageType.CHAT_JOIN, MessageType.CHAT_LEAVE:
+				log.debug("Ignoring client-managed chat membership change for user {} and type {}", username, msg.getType());
 				return Mono.empty();
 			default:
 				return Mono.empty();
@@ -97,15 +94,13 @@ public class ChatService {
 				return Mono.error(new IllegalArgumentException("Missing 'to'"));
 			}
 
-			if (GLOBAL_CHAT_GROUP.equals(to)) {
-				broadcast(GLOBAL_CHAT_GROUP, msg);
-			} else if (to.startsWith("group:")) {
+			if (to.startsWith(USER_CHAT_PREFIX)) {
 				broadcast(to, msg);
-			} else if (to.startsWith("user:")) {
-				broadcast(to, msg);
-				broadcast("user:" + fromUserId, msg);
+				broadcast(USER_CHAT_PREFIX + fromUserId, msg);
 			} else {
-				return Mono.error(new IllegalArgumentException("Invalid 'to' value"));
+				String scopedGroup = resolvePublicChatScope(fromUserId);
+				msg.setTo(scopedGroup);
+				broadcast(scopedGroup, msg);
 			}
 			return Mono.empty();
 		} catch (Exception e) {
@@ -113,13 +108,23 @@ public class ChatService {
 		}
 	}
 
+	private String resolvePublicChatScope(String username) {
+		String roomId = sessionRegistry.activeRoomId(username);
+		if (roomId != null && !roomId.isBlank()) {
+			return ROOM_CHAT_PREFIX + roomId;
+		}
+		if (sessionRegistry.hasActiveLobbySession(username)) {
+			return LOBBY_CHAT_GROUP;
+		}
+		throw new IllegalArgumentException("No active public chat scope for user " + username);
+	}
+
 	private ChatUser addUser(String userName) {
 		return users.computeIfAbsent(userName, ChatUser::new);
 	}
 
 	private void addUserToBaseGroups(ChatUser user) {
-		addToGroup(GLOBAL_CHAT_GROUP, user);
-		addToGroup("user:" + user.getName(), user);
+		addToGroup(USER_CHAT_PREFIX + user.getName(), user);
 		addToGroup(LOBBY_CHAT_GROUP, user);
 	}
 
@@ -135,18 +140,6 @@ public class ChatService {
 	private void broadcast(String groupName, ChatMessage msg) {
 		var group = getOrCreateGroup(groupName);
 		group.send(msg);
-	}
-
-	private void userJoinChatMessage(ChatUser user) {
-		if (user != null) {
-			broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " joined the chat"));
-		}
-	}
-
-	private void userLeaveChatMessage(ChatUser user) {
-		if (user != null) {
-			broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " left the chat"));
-		}
 	}
 
 	private void removeGroupIfEmpty(ChatGroup group) {

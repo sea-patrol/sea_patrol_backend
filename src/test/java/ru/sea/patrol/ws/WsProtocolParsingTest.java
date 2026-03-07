@@ -79,7 +79,7 @@ class WsProtocolParsingTest {
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, roomCatalogWsService);
 		return new GameWebSocketHandler(
-				new ChatService(objectMapper),
+				new ChatService(objectMapper, sessionRegistry),
 				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry),
 				roomCatalogWsService,
 				objectMapper,
@@ -102,3 +102,4 @@ class WsProtocolParsingTest {
 		}
 	}
 }
+

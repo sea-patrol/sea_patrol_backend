@@ -165,7 +165,6 @@ class RoomCatalogWsUpdatesTest {
 				.subscribe();
 
 		assertThat(firstMessageReceived.await(3, TimeUnit.SECONDS)).isTrue();
-		assertThat(messages.poll(1, TimeUnit.SECONDS)).isNotBlank();
 		assertThat(error.get()).isNull();
 		return new ActiveWsConnection(release, disposable, finished, error, messages);
 	}
@@ -267,3 +266,5 @@ class RoomCatalogWsUpdatesTest {
 		}
 	}
 }
+
+

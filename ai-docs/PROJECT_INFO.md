@@ -11,7 +11,7 @@
   - JWT-аутентификация для защищенных маршрутов и WebSocket;
   - lobby flow с room catalog, room creation и room join;
   - игровой цикл комнаты (физика, состояние игроков, ветер);
-  - чат (глобальный, групповой, личный).
+  - чат (server-scoped lobby chat, room chat, direct messages).
 
 ## 2. Технологический стек
 - Язык: `Java 25` (toolchain в Gradle).
@@ -58,6 +58,8 @@
   - `GameSessionRegistry` захватывает ownership active game session по `username`;
   - параллельное второе подключение для того же пользователя отклоняется `POLICY_VIOLATION`;
   - backend создаёт активную `lobby` session и автоматически добавляет пользователя в chat group `group:lobby`;
+  - public chat scope определяется сервером по session binding: в `lobby` сообщения публикуются только в `group:lobby`, а после room join только в `group:room:<roomId>`;
+  - клиентские `CHAT_JOIN` / `CHAT_LEAVE` не управляют lobby/room membership и игнорируются runtime-кодом;
   - игровой room stream не стартует автоматически и room binding ещё не назначен.
 - Вход в игровую комнату выполняется через `POST /api/v1/rooms/{roomId}/join`:
   - backend проверяет наличие активной lobby session;
@@ -81,6 +83,7 @@
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
 - `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
 - Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
+- Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует в single-session policy и в empty-room cleanup policy, но не покрывает полный resume room state.
@@ -111,6 +114,8 @@
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
+- Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
+
 
 
 

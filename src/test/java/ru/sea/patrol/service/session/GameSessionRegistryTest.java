@@ -62,8 +62,10 @@ class GameSessionRegistryTest {
 		registry.claimSession("alice", "s1");
 
 		assertThat(registry.hasActiveLobbySession("alice")).isTrue();
+		assertThat(registry.activeRoomId("alice")).isNull();
 		assertThat(registry.bindToRoom("alice", "sandbox-1")).isTrue();
 		assertThat(registry.hasActiveLobbySession("alice")).isFalse();
+		assertThat(registry.activeRoomId("alice")).isEqualTo("sandbox-1");
 		assertThat(registry.bindToRoom("alice", "sandbox-2")).isFalse();
 		registry.shutdown();
 	}
@@ -99,3 +101,4 @@ class GameSessionRegistryTest {
 		registry.shutdown();
 	}
 }
+

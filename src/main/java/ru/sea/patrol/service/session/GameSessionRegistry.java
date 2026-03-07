@@ -89,6 +89,14 @@ public class GameSessionRegistry {
 		return existing != null && existing.state() == SessionState.ACTIVE && existing.binding().isLobby();
 	}
 
+	public synchronized String activeRoomId(String username) {
+		var existing = sessions.get(username);
+		if (existing == null || existing.state() != SessionState.ACTIVE) {
+			return null;
+		}
+		return existing.binding().roomId();
+	}
+
 	public synchronized boolean bindToRoom(String username, String roomId) {
 		var existing = sessions.get(username);
 		if (existing == null || existing.state() != SessionState.ACTIVE || !existing.binding().isLobby()) {
@@ -193,3 +201,4 @@ public class GameSessionRegistry {
 		}
 	}
 }
+

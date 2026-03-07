@@ -196,6 +196,7 @@ Response `200 OK`:
 - Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
 - Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
 - После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
+- Public chat scope для `lobby` / `room` управляется только сервером по session binding; клиентские `CHAT_JOIN` / `CHAT_LEAVE` не могут подписать пользователя на чужую room group.
 - При lobby WebSocket-подключении backend автоматически отправляет `ROOMS_SNAPSHOT` с текущим room catalog.
 - До явного REST `POST /api/v1/rooms/{roomId}/join` пользователь не привязан к игровой комнате и не получает room stream.
 - Все live-изменения каталога (`create`, `join`, `leave`, cleanup`) публикуются как `ROOMS_UPDATED` полным snapshot payload без delta-патчей.
@@ -229,8 +230,8 @@ Response `200 OK`:
 ## 4.2 Поддерживаемые типы сообщений
 Enum `MessageType`:
 - `CHAT_MESSAGE`
-- `CHAT_JOIN`
-- `CHAT_LEAVE`
+- `CHAT_JOIN` (legacy compatibility; public group membership runtime-кодом игнорируется)
+- `CHAT_LEAVE` (legacy compatibility; public group membership runtime-кодом игнорируется)
 - `ROOMS_SNAPSHOT`
 - `ROOMS_UPDATED`
 - `PLAYER_INPUT`
@@ -248,15 +249,18 @@ Payload:
 ```json
 {
   "from": "ignored_by_server",
-  "to": "global | group:<id> | user:<username>",
+  "to": "group:lobby | group:room:<roomId> | global (legacy) | user:<username>",
   "text": "message text"
 }
 ```
 Поведение:
 - `from` переписывается сервером текущим username.
-- `to=global` — в глобальный чат.
-- `to=group:*` — в указанную группу.
 - `to=user:*` — в личный канал адресата + копия отправителю.
+- Любой public chat target (`group:lobby`, `group:room:*`, `global`) сервер переписывает в фактический scope активной сессии пользователя.
+- Если у пользователя активна `lobby` session, public message публикуется только в `group:lobby`.
+- Если у пользователя active room binding, public message публикуется только в `group:room:<roomId>`.
+- `to=global` остаётся только как legacy alias для текущего public scope на время перехода фронта.
+- Попытка отправить сообщение в чужую room group не позволяет обойти room chat isolation.
 
 ### `CHAT_JOIN`
 Payload: строка с именем группы, например:
@@ -264,11 +268,19 @@ Payload: строка с именем группы, например:
 ["CHAT_JOIN", "group:party-1"]
 ```
 
+Примечание:
+- тип остаётся в protocol surface для обратной совместимости;
+- backend runtime игнорирует client-managed membership changes для `group:lobby` / `group:room:*`.
+
 ### `CHAT_LEAVE`
 Payload: строка с именем группы, например:
 ```json
 ["CHAT_LEAVE", "group:party-1"]
 ```
+
+Примечание:
+- тип остаётся в protocol surface для обратной совместимости;
+- backend runtime игнорирует client-managed membership changes для `group:lobby` / `group:room:*`.
 
 ### `PLAYER_INPUT`
 Payload:
@@ -286,11 +298,14 @@ Payload:
 Payload (`ChatMessage`):
 ```json
 {
-  "from": "system|username",
-  "to": "global|group:*|user:*",
+  "from": "username",
+  "to": "group:lobby|group:room:<roomId>|user:*",
   "text": "..."
 }
 ```
+Примечание:
+- для public chat backend возвращает уже разрешённый `to` (`group:lobby` или `group:room:<roomId>`), а не доверяет произвольному target из клиента.
+
 
 ### `ROOMS_SNAPSHOT`
 Payload совпадает с `GET /api/v1/rooms`:
