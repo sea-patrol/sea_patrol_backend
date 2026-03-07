@@ -56,9 +56,31 @@ public class InMemoryUserRepository implements UserRepository {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
+        UserEntity userEntity4 = UserEntity.builder()
+                .username("user4")
+                .password(passwordEncoder.encode("123456"))
+                .email("email")
+                .role(UserRole.USER)
+                .locked(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        UserEntity userEntity5 = UserEntity.builder()
+                .username("user5")
+                .password(passwordEncoder.encode("123456"))
+                .email("email")
+                .role(UserRole.USER)
+                .locked(false)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
         users.put(userEntity.getUsername(), userEntity);
         users.put(userEntity2.getUsername(), userEntity2);
         users.put(userEntity3.getUsername(), userEntity3);
+        users.put(userEntity4.getUsername(), userEntity4);
+        users.put(userEntity5.getUsername(), userEntity5);
     }
 
     @Override
