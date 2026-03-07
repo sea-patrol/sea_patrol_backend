@@ -68,7 +68,7 @@
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
-- После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
+- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` хранит только временную metadata для room retention/reconnect policy.
 - Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; при disconnect lobby WS-клиенты получают `ROOMS_UPDATED` с уменьшенным `currentPlayers`, а после истечения окна — ещё один `ROOMS_UPDATED`, если комната была удалена автоматически.
 - Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
@@ -86,7 +86,7 @@
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
-- Reconnect grace уже участвует в single-session policy и в empty-room cleanup policy, но не покрывает полный resume room state.
+- Reconnect grace уже участвует в empty-room cleanup policy и в повторном admission flow, но не держит пользователя в состоянии active session и не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):

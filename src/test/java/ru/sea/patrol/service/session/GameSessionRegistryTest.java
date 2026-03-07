@@ -40,6 +40,20 @@ class GameSessionRegistryTest {
 	}
 
 	@Test
+	void disconnectImmediately_releasesLoginAdmission_andStartsGraceWindow() {
+		GameRoomProperties properties = newProperties(Duration.ofSeconds(30));
+		RoomRegistry roomRegistry = new RoomRegistry(properties);
+		GameSessionRegistry registry = newRegistry(properties, roomRegistry);
+		registry.claimSession("alice", "s1");
+
+		assertThat(registry.registerDisconnect("alice", "s1")).isTrue();
+		assertThat(registry.isLoginAllowed("alice")).isTrue();
+		assertThat(registry.isInReconnectGrace("alice")).isTrue();
+		assertThat(registry.hasActiveLobbySession("alice")).isFalse();
+		registry.shutdown();
+	}
+
+	@Test
 	void claimSession_allowsReconnectWithinGraceWindow() {
 		GameRoomProperties properties = newProperties(Duration.ofSeconds(30));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
@@ -51,6 +65,21 @@ class GameSessionRegistryTest {
 		assertThat(registry.isLoginAllowed("alice")).isTrue();
 		assertThat(registry.claimSession("alice", "s2")).isEqualTo(GameSessionRegistry.ClaimResult.RECONNECTED_SESSION);
 		assertThat(registry.isInReconnectGrace("alice")).isFalse();
+		registry.shutdown();
+	}
+
+	@Test
+	void staleDisconnect_doesNotDropNewerActiveSession() {
+		GameRoomProperties properties = newProperties(Duration.ofSeconds(30));
+		RoomRegistry roomRegistry = new RoomRegistry(properties);
+		GameSessionRegistry registry = newRegistry(properties, roomRegistry);
+		registry.claimSession("alice", "s1");
+		registry.registerDisconnect("alice", "s1");
+		assertThat(registry.claimSession("alice", "s2")).isEqualTo(GameSessionRegistry.ClaimResult.RECONNECTED_SESSION);
+
+		assertThat(registry.registerDisconnect("alice", "s1")).isFalse();
+		assertThat(registry.isLoginAllowed("alice")).isFalse();
+		assertThat(registry.hasActiveLobbySession("alice")).isTrue();
 		registry.shutdown();
 	}
 
@@ -101,4 +130,3 @@ class GameSessionRegistryTest {
 		registry.shutdown();
 	}
 }
-

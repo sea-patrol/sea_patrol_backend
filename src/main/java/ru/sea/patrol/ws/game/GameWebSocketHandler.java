@@ -75,31 +75,30 @@ public class GameWebSocketHandler implements WebSocketHandler {
 							.then();
 
 					AtomicBoolean cleanedUp = new AtomicBoolean(false);
-					Mono<Void> cleanupOnce = Mono.defer(() -> {
-						if (!cleanedUp.compareAndSet(false, true)) {
-							return Mono.empty();
-						}
-						return Mono.fromRunnable(() -> {
-							sessionRegistry.registerDisconnect(username, sessionId);
-							chatService.cleanupUser(username);
-							boolean roomCatalogChanged = gameService.cleanupPlayer(username);
-							if (roomCatalogChanged) {
-								roomCatalogWsService.publishRoomsUpdated();
-							}
-							log.info("Player {} disconnected", username);
-						});
-					});
+					Mono<Void> sessionFlow = session.send(outbound)
+							.and(input)
+							.and(session.closeStatus().then())
+							.doFinally(signalType -> cleanupSession(username, sessionId, cleanedUp));
 
-					Mono<Void> sessionFlow = session.send(outbound).and(input);
-					return Mono.usingWhen(
-							Mono.just(username),
-							__ -> sessionFlow,
-							__ -> cleanupOnce,
-							(__, err) -> cleanupOnce,
-							__ -> cleanupOnce
-					);
+					return sessionFlow;
 				})
 				.then();
+	}
+
+	private void cleanupSession(String username, String sessionId, AtomicBoolean cleanedUp) {
+		if (!cleanedUp.compareAndSet(false, true)) {
+			return;
+		}
+		if (!sessionRegistry.registerDisconnect(username, sessionId)) {
+			log.debug("Skipped stale disconnect cleanup for user {} and session {}", username, sessionId);
+			return;
+		}
+		chatService.cleanupUser(username);
+		boolean roomCatalogChanged = gameService.cleanupPlayer(username);
+		if (roomCatalogChanged) {
+			roomCatalogWsService.publishRoomsUpdated();
+		}
+		log.info("Player {} disconnected", username);
 	}
 
 	private Mono<Void> handleInbound(String username, MessageInput msg) {
@@ -139,3 +138,4 @@ public class GameWebSocketHandler implements WebSocketHandler {
 		}
 	}
 }
+
