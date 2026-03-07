@@ -111,8 +111,42 @@ Response `200 OK`:
 Примечания:
 - `rooms` может быть пустым массивом;
 - список комнат берётся из `RoomRegistry`;
-- комнаты сортируются по `id`/`name`;
+- комнаты сортируются по `id`;
 - до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`.
+
+### 3.6 `POST /api/v1/rooms`
+Создаёт новую комнату для lobby flow.
+
+Требует заголовок:
+- `Authorization: Bearer <jwt>`
+
+Request body (все поля опциональны):
+```json
+{ "name": "Sandbox 3", "mapId": "caribbean-01" }
+```
+
+Response `201 Created`:
+```json
+{
+  "id": "sandbox-3",
+  "name": "Sandbox 3",
+  "mapId": "caribbean-01",
+  "mapName": "Caribbean Sea",
+  "currentPlayers": 0,
+  "maxPlayers": 100,
+  "status": "OPEN"
+}
+```
+
+Примечания:
+- если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
+- если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
+- пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
+- если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`.
+
+Ошибки:
+- `400` -> `{ "errors": [{ "code": "INVALID_MAP_ID", "message": "Unknown mapId" }] }`
+- `409` -> `{ "errors": [{ "code": "MAX_ROOMS_REACHED", "message": "Maximum number of rooms reached" }] }`
 
 ## 4. WebSocket API (`/ws/game`)
 ## 4.1 Транспортный формат
@@ -304,6 +338,7 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
 
 
 

@@ -40,6 +40,20 @@ class RoomControllerTest {
 	}
 
 	@Test
+	void createRoom_withoutToken_returns401() {
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{}")
+				.exchange()
+				.expectStatus().isUnauthorized()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("SEAPATROL_UNAUTHORIZED");
+	}
+
+	@Test
 	void listRooms_returnsEmptyCatalog_whenNoRoomsExist() {
 		String token = loginAndGetToken("user1", "123456");
 
@@ -55,6 +69,95 @@ class RoomControllerTest {
 				.jsonPath("$.maxPlayersPerRoom").isEqualTo(100)
 				.jsonPath("$.rooms").isArray()
 				.jsonPath("$.rooms.length()").isEqualTo(0);
+	}
+
+	@Test
+	void createRoom_returnsCreatedResponse_withGeneratedRoomIdentity() {
+		String token = loginAndGetToken("user1", "123456");
+
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.headers(headers -> headers.setBearerAuth(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{}")
+				.exchange()
+				.expectStatus().isCreated()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.id").isEqualTo("sandbox-1")
+				.jsonPath("$.name").isEqualTo("Sandbox 1")
+				.jsonPath("$.mapId").isEqualTo("caribbean-01")
+				.jsonPath("$.mapName").isEqualTo("Caribbean Sea")
+				.jsonPath("$.currentPlayers").isEqualTo(0)
+				.jsonPath("$.maxPlayers").isEqualTo(100)
+				.jsonPath("$.status").isEqualTo("OPEN");
+	}
+
+	@Test
+	void createRoom_withCustomName_slugifiesId_andPreservesDisplayName() {
+		String token = loginAndGetToken("user1", "123456");
+
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.headers(headers -> headers.setBearerAuth(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "name": "Sandbox 3",
+						  "mapId": "caribbean-01"
+						}
+						""")
+				.exchange()
+				.expectStatus().isCreated()
+				.expectBody()
+				.jsonPath("$.id").isEqualTo("sandbox-3")
+				.jsonPath("$.name").isEqualTo("Sandbox 3")
+				.jsonPath("$.mapId").isEqualTo("caribbean-01");
+	}
+
+	@Test
+	void createRoom_invalidMapId_returns400() {
+		String token = loginAndGetToken("user1", "123456");
+
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.headers(headers -> headers.setBearerAuth(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "mapId": "japan-01"
+						}
+						""")
+				.exchange()
+				.expectStatus().isBadRequest()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("INVALID_MAP_ID")
+				.jsonPath("$.errors[0].message").isEqualTo("Unknown mapId");
+	}
+
+	@Test
+	void createRoom_whenMaxRoomsReached_returns409() {
+		String token = loginAndGetToken("user1", "123456");
+		for (int i = 0; i < 5; i++) {
+			roomRegistry.createRoom(null, "caribbean-01", "Caribbean Sea");
+		}
+
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.headers(headers -> headers.setBearerAuth(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("{}")
+				.exchange()
+				.expectStatus().isEqualTo(409)
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.errors[0].code").isEqualTo("MAX_ROOMS_REACHED")
+				.jsonPath("$.errors[0].message").isEqualTo("Maximum number of rooms reached");
 	}
 
 	@Test
@@ -119,4 +222,3 @@ class RoomControllerTest {
 				.setLength(26f);
 	}
 }
-
