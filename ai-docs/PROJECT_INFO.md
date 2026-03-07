@@ -29,7 +29,7 @@
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
-- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, room config properties, цикл обновления, игроки.
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
@@ -68,7 +68,7 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, но полноценный `RoomRegistry` и room admission flow еще будут реализованы отдельными backend tasks.
+- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, `RoomRegistry` уже выделен как отдельный lifecycle layer, но room admission flow и limits enforcement еще будут реализованы отдельными backend tasks.
 - Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
@@ -96,8 +96,10 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- Комнаты пока создаются через in-memory `computeIfAbsent`; полноценный `RoomRegistry` и enforcement room limits еще не реализованы.
+- `RoomRegistry` уже управляет активными комнатами как отдельная абстракция, но max room limits и расширенный cleanup policy еще не реализованы.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
+
+
 
 
 

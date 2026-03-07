@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.GameService;
+import ru.sea.patrol.service.game.RoomRegistry;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.ws.protocol.MessageType;
@@ -71,9 +72,10 @@ class WsProtocolParsingTest {
 				Duration.ofMillis(100),
 				Duration.ofSeconds(30)
 		);
+		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper),
-				new GameService(objectMapper, roomProperties),
+				new GameService(objectMapper, roomProperties, roomRegistry),
 				objectMapper,
 				new GameSessionRegistry(roomProperties)
 		);

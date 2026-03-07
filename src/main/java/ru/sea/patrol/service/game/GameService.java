@@ -23,10 +23,10 @@ public class GameService {
 
   private final ObjectMapper objectMapper;
   private final GameRoomProperties roomProperties;
+  private final RoomRegistry roomRegistry;
   private final Random random = new Random();
 
   private final Map<String, Player> players = new ConcurrentHashMap<>();
-  private final Map<String, GameRoom> rooms = new ConcurrentHashMap<>();
 
   public Flux<MessageOutput> initialize(String playerName) {
     var player = retrievePlayer(playerName);
@@ -77,25 +77,22 @@ public class GameService {
   }
 
   public void startRoom(String roomName) {
-    var room = rooms.computeIfAbsent(roomName, this::createRoom);
+    var room = roomRegistry.getOrCreateRoom(roomName);
     if (!room.isStarted()) {
       room.start();
     }
   }
-  
+
   public void joinRoom(String playerName, String roomName) {
-    var room = rooms.computeIfAbsent(roomName, this::createRoom);
+    var room = roomRegistry.getOrCreateRoom(roomName);
     room.join(retrievePlayer(playerName));
   }
-  
+
   public void leaveRoom(String playerName, String roomName) {
-    var room = rooms.get(roomName);
+    var room = roomRegistry.findRoom(roomName);
     if (room != null) {
       room.leave(playerName);
-      if (room.isEmpty()) {
-        rooms.remove(roomName);
-        room.stop();
-      }
+      roomRegistry.removeRoomIfEmpty(roomName);
     }
   }
 
@@ -107,13 +104,9 @@ public class GameService {
     }
   }
 
-  private GameRoom createRoom(String roomName) {
-    return new GameRoom(roomName, roomProperties.updatePeriod().toMillis());
-  }
-
   private Player retrievePlayer(String playerName) {
-    return players.computeIfAbsent(playerName, name -> { return
-            new Player(name)
+    return players.computeIfAbsent(playerName, name -> {
+      return new Player(name)
               .setModel("model")
               .setMaxHealth(500)
               .setHealth(500)
