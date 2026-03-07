@@ -42,7 +42,7 @@
 ### 4.1 HTTP / REST
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
-- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`.
+- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются после того, как в них не остаётся активных игроков и завершается room-bound reconnect grace.
 - `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
@@ -66,7 +66,8 @@
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
 - После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
-- Текущий reconnect grace влияет на admission policy, но еще не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
+- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; после истечения окна пустая комната удаляется автоматически.
+- Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
   - `max-players-per-room`;
@@ -81,7 +82,7 @@
 - Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
 - Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
-- Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
+- Reconnect grace уже участвует в single-session policy и в empty-room cleanup policy, но не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):
@@ -108,6 +109,7 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- Room cleanup policy после empty-room/disconnect ещё будет развиваться отдельно.
-- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
+- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
+
+
 

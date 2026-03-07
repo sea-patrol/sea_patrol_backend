@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
@@ -24,6 +25,7 @@ public class GameService {
 	private final ObjectMapper objectMapper;
 	private final GameRoomProperties roomProperties;
 	private final RoomRegistry roomRegistry;
+	private final GameSessionRegistry sessionRegistry;
 	private final Random random = new Random();
 
 	private final Map<String, Player> players = new ConcurrentHashMap<>();
@@ -93,7 +95,9 @@ public class GameService {
 		var room = roomRegistry.findRoom(roomName);
 		if (room != null) {
 			room.leave(playerName);
-			roomRegistry.removeRoomIfEmpty(roomName);
+			if (!sessionRegistry.hasReconnectGraceInRoom(roomName)) {
+				roomRegistry.removeRoomIfEmpty(roomName);
+			}
 		}
 	}
 

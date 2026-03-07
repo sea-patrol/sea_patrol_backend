@@ -73,11 +73,12 @@ class WsProtocolParsingTest {
 				Duration.ofSeconds(30)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper),
-				new GameService(objectMapper, roomProperties, roomRegistry),
+				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry),
 				objectMapper,
-				new GameSessionRegistry(roomProperties)
+				sessionRegistry
 		);
 	}
 

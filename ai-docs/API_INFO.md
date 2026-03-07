@@ -113,7 +113,8 @@ Response `200 OK`:
 - `rooms` может быть пустым массивом;
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
-- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`.
+- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`;
+- пустая комната удаляется из registry, когда в ней больше нет активных игроков и не осталось игроков в reconnect grace для этого `roomId`.
 
 ### 3.6 `POST /api/v1/rooms`
 Создаёт новую комнату для lobby flow.
@@ -190,7 +191,8 @@ Response `200 OK`:
 - Backend допускает только одну активную игровую WebSocket-сессию на `username`.
 - Повторное параллельное подключение с тем же пользователем отклоняется закрытием `POLICY_VIOLATION` с reason, содержащим `SEAPATROL_DUPLICATE_SESSION`.
 - После disconnect username переходит в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новое WS-подключение разрешается.
-- Текущая реализация разрешает reconnect только на уровне session admission. Полный resume room state не входит в текущий контракт и будет отдельной задачей.
+- Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
+- Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
 - После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
 - До явного REST `POST /api/v1/rooms/{roomId}/join` пользователь не привязан к игровой комнате и не получает room stream.
 
@@ -422,3 +424,5 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+

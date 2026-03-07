@@ -10,6 +10,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import ru.sea.patrol.service.game.GameRoomProperties;
+import ru.sea.patrol.service.game.RoomRegistry;
 
 @Service
 public class GameSessionRegistry {
@@ -19,11 +20,13 @@ public class GameSessionRegistry {
 
 	private final long reconnectGracePeriodMillis;
 	private final ScheduledExecutorService scheduler;
+	private final RoomRegistry roomRegistry;
 	private final Map<String, SessionEntry> sessions = new ConcurrentHashMap<>();
 
-	public GameSessionRegistry(GameRoomProperties roomProperties) {
+	public GameSessionRegistry(GameRoomProperties roomProperties, RoomRegistry roomRegistry) {
 		this.reconnectGracePeriodMillis = roomProperties.reconnectGracePeriod().toMillis();
 		this.scheduler = Executors.newSingleThreadScheduledExecutor(sessionThreadFactory());
+		this.roomRegistry = roomRegistry;
 	}
 
 	public synchronized boolean isLoginAllowed(String username) {
@@ -44,8 +47,10 @@ public class GameSessionRegistry {
 					: ClaimResult.REJECTED_DUPLICATE;
 		}
 
+		String retainedRoomId = existing.binding().roomId();
 		cancel(existing.expirationTask());
 		sessions.put(username, SessionEntry.active(sessionId));
+		cleanupRetainedRoomIfNeeded(retainedRoomId);
 		return ClaimResult.RECONNECTED_SESSION;
 	}
 
@@ -86,20 +91,38 @@ public class GameSessionRegistry {
 		return true;
 	}
 
+	public synchronized boolean hasReconnectGraceInRoom(String roomId) {
+		return roomId != null && sessions.values().stream()
+				.anyMatch(entry -> entry.state() == SessionState.DISCONNECTED_GRACE && roomId.equals(entry.binding().roomId()));
+	}
+
 	@PreDestroy
 	public void shutdown() {
 		scheduler.shutdownNow();
 	}
 
 	private void expireGraceWindow(String username, String sessionId) {
+		String retainedRoomId = null;
 		synchronized (this) {
 			var existing = sessions.get(username);
 			if (existing != null
 					&& existing.state() == SessionState.DISCONNECTED_GRACE
 					&& existing.sessionId().equals(sessionId)) {
+				retainedRoomId = existing.binding().roomId();
 				sessions.remove(username);
 			}
 		}
+		cleanupRetainedRoomIfNeeded(retainedRoomId);
+	}
+
+	private void cleanupRetainedRoomIfNeeded(String roomId) {
+		if (roomId == null) {
+			return;
+		}
+		if (hasReconnectGraceInRoom(roomId)) {
+			return;
+		}
+		roomRegistry.removeRoomIfEmpty(roomId);
 	}
 
 	private static void cancel(ScheduledFuture<?> future) {
