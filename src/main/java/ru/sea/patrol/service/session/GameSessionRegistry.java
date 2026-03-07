@@ -72,6 +72,20 @@ public class GameSessionRegistry {
 		return existing != null && existing.state() == SessionState.DISCONNECTED_GRACE;
 	}
 
+	public synchronized boolean hasActiveLobbySession(String username) {
+		var existing = sessions.get(username);
+		return existing != null && existing.state() == SessionState.ACTIVE && existing.binding().isLobby();
+	}
+
+	public synchronized boolean bindToRoom(String username, String roomId) {
+		var existing = sessions.get(username);
+		if (existing == null || existing.state() != SessionState.ACTIVE || !existing.binding().isLobby()) {
+			return false;
+		}
+		sessions.put(username, existing.withBinding(SessionBinding.room(roomId)));
+		return true;
+	}
+
 	@PreDestroy
 	public void shutdown() {
 		scheduler.shutdownNow();
@@ -113,14 +127,37 @@ public class GameSessionRegistry {
 		DISCONNECTED_GRACE
 	}
 
-	private record SessionEntry(String sessionId, SessionState state, ScheduledFuture<?> expirationTask) {
+	private record SessionBinding(String roomId) {
+		private static SessionBinding lobby() {
+			return new SessionBinding(null);
+		}
+
+		private static SessionBinding room(String roomId) {
+			return new SessionBinding(roomId);
+		}
+
+		private boolean isLobby() {
+			return roomId == null;
+		}
+	}
+
+	private record SessionEntry(
+			String sessionId,
+			SessionState state,
+			SessionBinding binding,
+			ScheduledFuture<?> expirationTask
+	) {
 
 		private static SessionEntry active(String sessionId) {
-			return new SessionEntry(sessionId, SessionState.ACTIVE, null);
+			return new SessionEntry(sessionId, SessionState.ACTIVE, SessionBinding.lobby(), null);
 		}
 
 		private SessionEntry disconnected(ScheduledFuture<?> future) {
-			return new SessionEntry(sessionId, SessionState.DISCONNECTED_GRACE, future);
+			return new SessionEntry(sessionId, SessionState.DISCONNECTED_GRACE, binding, future);
+		}
+
+		private SessionEntry withBinding(SessionBinding newBinding) {
+			return new SessionEntry(sessionId, state, newBinding, expirationTask);
 		}
 	}
 }

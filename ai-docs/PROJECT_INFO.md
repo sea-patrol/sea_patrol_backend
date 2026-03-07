@@ -9,6 +9,7 @@
 - Функции:
   - регистрация и логин пользователей;
   - JWT-аутентификация для защищенных маршрутов и WebSocket;
+  - lobby flow с room catalog, room creation и room join;
   - игровой цикл комнаты (физика, состояние игроков, ветер);
   - чат (глобальный, групповой, личный).
 
@@ -26,11 +27,12 @@
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
-- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`).
+- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`).
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
-- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, `RoomCatalogService`, `RoomJoinService`, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/session` — single-session policy и room/lobby binding для WS-пользователей.
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
@@ -42,11 +44,12 @@
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
 - `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`.
 - `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation.
+- `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
-- Остальные HTTP-маршруты, включая `GET /api/v1/rooms` и `POST /api/v1/rooms`, требуют JWT в `Authorization: Bearer <token>`.
+- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms` и `POST /api/v1/rooms/{roomId}/join`, требуют JWT в `Authorization: Bearer <token>`.
 - Для WebSocket handshake (`GET /ws/...`) токен читается из query-параметра `token`.
 
 ### 4.3 WebSocket / Игра
@@ -54,10 +57,13 @@
 - При подключении пользователя:
   - `GameSessionRegistry` захватывает ownership active game session по `username`;
   - параллельное второе подключение для того же пользователя отклоняется `POLICY_VIOLATION`;
-  - инициализируется чат-поток;
-  - инициализируется игровой поток;
-  - пользователь помещается в default room из `game.room.default-room-name`;
-  - при первом подключении запускается игровой цикл комнаты.
+  - backend создаёт активную `lobby` session и автоматически добавляет пользователя в chat group `group:lobby`;
+  - игровой room stream не стартует автоматически и room binding ещё не назначен.
+- Вход в игровую комнату выполняется через `POST /api/v1/rooms/{roomId}/join`:
+  - backend проверяет наличие активной lobby session;
+  - проверяет существование комнаты и лимит `maxPlayersPerRoom`;
+  - подготавливает игрока к join, переключает session binding на `roomId` и переносит chat membership из `group:lobby` в `group:room:<roomId>`;
+  - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
 - После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
 - Текущий reconnect grace влияет на admission policy, но еще не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
@@ -71,8 +77,10 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, `RoomRegistry` уже выделен как отдельный lifecycle layer, а `GET /api/v1/rooms` и `POST /api/v1/rooms` уже используют его как source of truth; room admission flow и join validation еще будут реализованы отдельными backend tasks.
-- Room catalog и create room flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
+- `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join flows.
+- Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
+- Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
+- `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
@@ -100,17 +108,6 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- `RoomRegistry` уже управляет активными комнатами как отдельная абстракция, но max room limits и расширенный cleanup policy еще не реализованы.
+- Room cleanup policy после empty-room/disconnect ещё будет развиваться отдельно.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
-
-
-
-
-
-
-
-
-
-
-
 

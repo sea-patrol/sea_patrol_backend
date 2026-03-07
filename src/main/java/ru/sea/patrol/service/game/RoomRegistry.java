@@ -42,6 +42,10 @@ public class RoomRegistry {
 		return entry == null ? null : entry.room();
 	}
 
+	public RoomRegistryEntry findEntry(String roomId) {
+		return rooms.get(roomId);
+	}
+
 	public synchronized boolean removeRoomIfEmpty(String roomId) {
 		var entry = rooms.get(roomId);
 		if (entry == null || !entry.room().isEmpty()) {

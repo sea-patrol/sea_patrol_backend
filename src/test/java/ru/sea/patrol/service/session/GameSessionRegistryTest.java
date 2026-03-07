@@ -40,6 +40,17 @@ class GameSessionRegistryTest {
 	}
 
 	@Test
+	void claimSession_startsInLobby_andCanBindToRoomOnce() {
+		GameSessionRegistry registry = newRegistry(Duration.ofSeconds(30));
+		registry.claimSession("alice", "s1");
+
+		assertThat(registry.hasActiveLobbySession("alice")).isTrue();
+		assertThat(registry.bindToRoom("alice", "sandbox-1")).isTrue();
+		assertThat(registry.hasActiveLobbySession("alice")).isFalse();
+		assertThat(registry.bindToRoom("alice", "sandbox-2")).isFalse();
+	}
+
+	@Test
 	void disconnectGrace_expiresAndDropsTrackedSession() throws Exception {
 		GameSessionRegistry registry = newRegistry(Duration.ofMillis(120));
 		registry.claimSession("alice", "s1");
