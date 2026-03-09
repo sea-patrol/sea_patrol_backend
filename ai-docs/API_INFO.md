@@ -6,6 +6,7 @@
 ## 1. Базовая информация
 - Base URL (локально): `http://localhost:8080` (дефолт Spring Boot).
 - API-префикс auth: `/api/v1/auth`.
+- API-префикс rooms: `/api/v1/rooms`.
 - WebSocket endpoint: `/ws/game`.
 - Формат данных: JSON.
 
@@ -83,13 +84,122 @@ Response `200 OK`:
 ### 3.4 `GET /game`
 Возвращает `static/index.html` (`text/html`).
 
+### 3.5 `GET /api/v1/rooms`
+Возвращает текущий room catalog для lobby UI.
+
+Требует заголовок:
+- `Authorization: Bearer <jwt>`
+
+Response `200 OK`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": [
+    {
+      "id": "main",
+      "name": "main",
+      "mapId": "caribbean-01",
+      "mapName": "Caribbean Sea",
+      "currentPlayers": 1,
+      "maxPlayers": 100,
+      "status": "OPEN"
+    }
+  ]
+}
+```
+
+Примечания:
+- `rooms` может быть пустым массивом;
+- список комнат берётся из `RoomRegistry`;
+- комнаты сортируются по `id`;
+- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`;
+- пустая комната удаляется из registry, когда в ней больше нет активных игроков и не осталось игроков в reconnect grace для этого `roomId`.
+
+### 3.6 `POST /api/v1/rooms`
+Создаёт новую комнату для lobby flow.
+
+Требует заголовок:
+- `Authorization: Bearer <jwt>`
+
+Request body (все поля опциональны):
+```json
+{ "name": "Sandbox 3", "mapId": "caribbean-01" }
+```
+
+Response `201 Created`:
+```json
+{
+  "id": "sandbox-3",
+  "name": "Sandbox 3",
+  "mapId": "caribbean-01",
+  "mapName": "Caribbean Sea",
+  "currentPlayers": 0,
+  "maxPlayers": 100,
+  "status": "OPEN"
+}
+```
+
+Примечания:
+- если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
+- если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
+- пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
+- если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
+- после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам.
+
+Ошибки:
+- `400` -> `{ "errors": [{ "code": "INVALID_MAP_ID", "message": "Unknown mapId" }] }`
+- `409` -> `{ "errors": [{ "code": "MAX_ROOMS_REACHED", "message": "Maximum number of rooms reached" }] }`
+
+### 3.7 `POST /api/v1/rooms/{roomId}/join`
+Подтверждает вход игрока в комнату и переключает активную WS-сессию из `lobby` в потоки комнаты.
+
+Требует заголовок:
+- `Authorization: Bearer <jwt>`
+
+Request body:
+```json
+{}
+```
+
+Response `200 OK`:
+```json
+{
+  "roomId": "sandbox-1",
+  "mapId": "caribbean-01",
+  "mapName": "Caribbean Sea",
+  "currentPlayers": 1,
+  "maxPlayers": 100,
+  "status": "JOINED"
+}
+```
+
+Примечания:
+- join невозможен без активной lobby WebSocket session для того же `username`;
+- backend проверяет существование комнаты и лимит `maxPlayersPerRoom`;
+- после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
+- после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
+- после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
+- текущий `SPAWN_ASSIGNED` использует временный authoritative placeholder spawn `(x=0.0, z=0.0, angle=0.0)` до отдельных задач по spawn logic.
+
+Ошибки:
+- `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
+- `409` -> `{ "errors": [{ "code": "ROOM_FULL", "message": "Room is full" }] }`
+- `409` -> `{ "errors": [{ "code": "LOBBY_SESSION_REQUIRED", "message": "Active lobby WebSocket session is required" }] }`
+
 ## 4. WebSocket API (`/ws/game`)
-## 4.1 Транспортный формат
+### 4.1 Транспортный формат и session policy
 ### Session policy
 - Backend допускает только одну активную игровую WebSocket-сессию на `username`.
 - Повторное параллельное подключение с тем же пользователем отклоняется закрытием `POLICY_VIOLATION` с reason, содержащим `SEAPATROL_DUPLICATE_SESSION`.
-- После disconnect username переходит в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новое WS-подключение разрешается.
-- Текущая реализация разрешает reconnect только на уровне session admission. Полный resume room state не входит в текущий контракт и будет отдельной задачей.
+- После disconnect active session ownership снимается сразу, а username переводится в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новый login и новое WS-подключение разрешаются.
+- Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
+- Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
+- После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
+- Public chat scope для `lobby` / `room` управляется только сервером по session binding; клиентские `CHAT_JOIN` / `CHAT_LEAVE` не могут подписать пользователя на чужую room group.
+- При lobby WebSocket-подключении backend автоматически отправляет `ROOMS_SNAPSHOT` с текущим room catalog.
+- До явного REST `POST /api/v1/rooms/{roomId}/join` пользователь не привязан к игровой комнате и не получает room stream.
+- Все live-изменения каталога (`create`, `join`, `leave`, cleanup`) публикуются как `ROOMS_UPDATED` полным snapshot payload без delta-патчей.
 
 ### Входящие сообщения от клиента
 Сервер ожидает массив:
@@ -117,15 +227,19 @@ Response `200 OK`:
 - добавить опциональное поле `protocolVersion` в исходящий envelope (сервер -> клиент) и/или входящие сообщения клиента;
 - или ввести необязательное приветственное сообщение типа `HELLO`/`CAPABILITIES` с версиями/фичами.
 
-
 ## 4.2 Поддерживаемые типы сообщений
 Enum `MessageType`:
 - `CHAT_MESSAGE`
-- `CHAT_JOIN`
-- `CHAT_LEAVE`
+- `CHAT_JOIN` (legacy compatibility; public group membership runtime-кодом игнорируется)
+- `CHAT_LEAVE` (legacy compatibility; public group membership runtime-кодом игнорируется)
+- `ROOMS_SNAPSHOT`
+- `ROOMS_UPDATED`
 - `PLAYER_INPUT`
 - `PLAYER_JOIN`
 - `PLAYER_LEAVE`
+- `ROOM_JOINED`
+- `ROOM_JOIN_REJECTED`
+- `SPAWN_ASSIGNED`
 - `INIT_GAME_STATE`
 - `UPDATE_GAME_STATE`
 
@@ -135,15 +249,18 @@ Payload:
 ```json
 {
   "from": "ignored_by_server",
-  "to": "global | group:<id> | user:<username>",
+  "to": "group:lobby | group:room:<roomId> | global (legacy) | user:<username>",
   "text": "message text"
 }
 ```
 Поведение:
 - `from` переписывается сервером текущим username.
-- `to=global` — в глобальный чат.
-- `to=group:*` — в указанную группу.
 - `to=user:*` — в личный канал адресата + копия отправителю.
+- Любой public chat target (`group:lobby`, `group:room:*`, `global`) сервер переписывает в фактический scope активной сессии пользователя.
+- Если у пользователя активна `lobby` session, public message публикуется только в `group:lobby`.
+- Если у пользователя active room binding, public message публикуется только в `group:room:<roomId>`.
+- `to=global` остаётся только как legacy alias для текущего public scope на время перехода фронта.
+- Попытка отправить сообщение в чужую room group не позволяет обойти room chat isolation.
 
 ### `CHAT_JOIN`
 Payload: строка с именем группы, например:
@@ -151,11 +268,19 @@ Payload: строка с именем группы, например:
 ["CHAT_JOIN", "group:party-1"]
 ```
 
+Примечание:
+- тип остаётся в protocol surface для обратной совместимости;
+- backend runtime игнорирует client-managed membership changes для `group:lobby` / `group:room:*`.
+
 ### `CHAT_LEAVE`
 Payload: строка с именем группы, например:
 ```json
 ["CHAT_LEAVE", "group:party-1"]
 ```
+
+Примечание:
+- тип остаётся в protocol surface для обратной совместимости;
+- backend runtime игнорирует client-managed membership changes для `group:lobby` / `group:room:*`.
 
 ### `PLAYER_INPUT`
 Payload:
@@ -173,11 +298,84 @@ Payload:
 Payload (`ChatMessage`):
 ```json
 {
-  "from": "system|username",
-  "to": "global|group:*|user:*",
+  "from": "username",
+  "to": "group:lobby|group:room:<roomId>|user:*",
   "text": "..."
 }
 ```
+Примечание:
+- для public chat backend возвращает уже разрешённый `to` (`group:lobby` или `group:room:<roomId>`), а не доверяет произвольному target из клиента.
+
+
+### `ROOMS_SNAPSHOT`
+Payload совпадает с `GET /api/v1/rooms`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": []
+}
+```
+
+Примечание:
+- отправляется автоматически при lobby WebSocket-подключении.
+
+### `ROOMS_UPDATED`
+Payload совпадает с `GET /api/v1/rooms`:
+```json
+{
+  "maxRooms": 5,
+  "maxPlayersPerRoom": 100,
+  "rooms": []
+}
+```
+
+Примечания:
+- публикуется для active lobby WebSocket-клиентов после `create`, `join`, `leave`, cleanup;
+- payload всегда является полным snapshot, а не delta-патчем.
+
+### `ROOM_JOINED`
+Payload:
+```json
+{
+  "roomId": "sandbox-1",
+  "mapId": "caribbean-01",
+  "mapName": "Caribbean Sea",
+  "currentPlayers": 1,
+  "maxPlayers": 100,
+  "status": "JOINED"
+}
+```
+
+### `ROOM_JOIN_REJECTED`
+Payload (shape зарезервирован в протоколе):
+```json
+{
+  "roomId": "sandbox-1",
+  "reason": "FULL"
+}
+```
+
+Примечание:
+- тип уже есть в backend enum как часть согласованного room protocol surface;
+- в текущей реализации `TASK-011` отказ по join возвращается через REST error response, а отдельное WS-событие `ROOM_JOIN_REJECTED` ещё не отправляется runtime-кодом.
+
+### `SPAWN_ASSIGNED`
+Payload:
+```json
+{
+  "roomId": "sandbox-1",
+  "reason": "INITIAL",
+  "x": 0.0,
+  "z": 0.0,
+  "angle": 0.0
+}
+```
+
+Примечания:
+- spawn/respawn остаётся server-authoritative;
+- для текущего backend runtime initial join отправляет placeholder coordinates `(0.0, 0.0, 0.0)`;
+- отдельная spawn logic и non-placeholder assignment остаются следующими backend задачами.
 
 ### `PLAYER_JOIN`
 Payload (`PlayerInfo`):
@@ -204,7 +402,7 @@ Payload: имя игрока (строка).
 Payload:
 ```json
 {
-  "room": "main",
+  "room": "sandbox-1",
   "wind": {"angle": 0.0, "speed": 0.0},
   "players": [
     {
@@ -245,7 +443,6 @@ Payload:
 
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
 
-
 ## 5. Формат ошибок
 Для приложенческих ошибок (через глобальный handler) ответ:
 ```json
@@ -263,6 +460,8 @@ Payload:
 - `401` для auth/unauthorized/JWT ошибок.
 - `400` для `ApiException`.
 - `400` для validation ошибок (`SEAPATROL_VALIDATION_ERROR`).
+- `404` для `NotFoundException`.
+- `409` для `ConflictException`.
 - `500` для прочих ошибок.
 
 Важно:
@@ -273,8 +472,6 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
-
-
 
 
 

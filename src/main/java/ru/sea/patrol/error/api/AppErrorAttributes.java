@@ -14,6 +14,8 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.server.ServerWebInputException;
 import ru.sea.patrol.error.domain.ApiException;
 import ru.sea.patrol.error.domain.AuthException;
+import ru.sea.patrol.error.domain.ConflictException;
+import ru.sea.patrol.error.domain.NotFoundException;
 import ru.sea.patrol.error.domain.UnauthorizedException;
 
 @Component
@@ -37,6 +39,12 @@ public class AppErrorAttributes extends DefaultErrorAttributes {
 		} else if (error instanceof UnauthorizedException unauthorizedException) {
 			status = HttpStatus.UNAUTHORIZED;
 			errors.add(new ApiError(unauthorizedException.getErrorCode(), unauthorizedException.getMessage()));
+		} else if (error instanceof NotFoundException notFoundException) {
+			status = HttpStatus.NOT_FOUND;
+			errors.add(new ApiError(notFoundException.getErrorCode(), notFoundException.getMessage()));
+		} else if (error instanceof ConflictException conflictException) {
+			status = HttpStatus.CONFLICT;
+			errors.add(new ApiError(conflictException.getErrorCode(), conflictException.getMessage()));
 		} else if (error instanceof ApiException apiException) {
 			status = HttpStatus.BAD_REQUEST;
 			errors.add(new ApiError(apiException.getErrorCode(), apiException.getMessage()));

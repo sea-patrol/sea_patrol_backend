@@ -27,7 +27,6 @@ public class GameRoom {
 
 	@Getter
 	private final String name;
-
 	private final Map<String, Player> players = new ConcurrentHashMap<>();
 
 	@Getter
@@ -55,18 +54,33 @@ public class GameRoom {
 		}
 		this.name = name;
 		this.updatePeriodMillis = updatePeriodMillis;
-		// Best-effort: drop messages for slow subscribers instead of unbounded buffering.
 		this.sink = Sinks.many().multicast().directBestEffort();
 	}
 
 	public synchronized void join(Player player) {
+		join(player, true);
+	}
+
+	public synchronized void join(Player player, boolean activateImmediately) {
 		log.info("Player {} joining room {}", player.getName(), name);
 		players.put(player.getName(), player);
-		player.joinRoom(this);
+		player.joinRoom(this, false);
+		if (activateImmediately) {
+			activateJoinedPlayer(player);
+		}
+	}
+
+	public synchronized void activateJoinedPlayer(Player player) {
+		if (player == null) {
+			return;
+		}
 		if (started) {
 			broadcastPlayerJoinMessage(player);
+			player.activateRoomSubscription();
 			sendStartMessage(player);
+			return;
 		}
+		player.activateRoomSubscription();
 	}
 
 	public synchronized void leave(String playerName) {
@@ -87,6 +101,10 @@ public class GameRoom {
 		return players.isEmpty();
 	}
 
+	public int getPlayerCount() {
+		return players.size();
+	}
+
 	public synchronized void start() {
 		start(true);
 	}
@@ -105,10 +123,7 @@ public class GameRoom {
 
 		lastTime = System.nanoTime();
 		delta = retrieveDelta();
-
 		started = true;
-
-		// INIT messages are sent per-player to avoid relying on room-wide best-effort broadcasting.
 		players.values().forEach(this::sendStartMessage);
 
 		if (scheduleUpdates) {
@@ -123,7 +138,6 @@ public class GameRoom {
 
 		delta = retrieveDelta();
 		wind.update(delta);
-
 		players.values().forEach(player -> {
 			if (player.getShip() != null) {
 				player.getShip().update(delta, wind);
@@ -140,7 +154,6 @@ public class GameRoom {
 		}
 
 		log.info("Stopping room game {}", name);
-
 		if (scheduledFuture != null) {
 			scheduledFuture.cancel(false);
 			scheduledFuture = null;
@@ -186,7 +199,7 @@ public class GameRoom {
 		return newDelta;
 	}
 
-	private void sendStartMessage(Player player) {
+	public void sendStartMessage(Player player) {
 		var startMessage = new MessageOutput(
 				MessageType.INIT_GAME_STATE,
 				new InitGameStateMessage(
@@ -239,17 +252,17 @@ public class GameRoom {
 		}
 	}
 
-	private void broadcastPlayerJoinMessage(Player player) {
+	public void broadcastPlayerJoinMessage(Player player) {
 		var joinMessage = new MessageOutput(
 				MessageType.PLAYER_JOIN,
 				new PlayerInfo(
 						player.getName(),
 						player.getHealth(),
 						player.getMaxHealth(),
-						player.getShip().getVelocity(),
-						player.getShip().getFrontendX(),
-						player.getShip().getFrontendZ(),
-						player.getShip().getOrientation(),
+						player.getShip() == null ? 0.0f : player.getShip().getVelocity(),
+						player.getShip() == null ? player.getX() : player.getShip().getFrontendX(),
+						player.getShip() == null ? player.getZ() : player.getShip().getFrontendZ(),
+						player.getShip() == null ? player.getAngle() : player.getShip().getOrientation(),
 						player.getModel(),
 						player.getHeight(),
 						player.getWidth(),

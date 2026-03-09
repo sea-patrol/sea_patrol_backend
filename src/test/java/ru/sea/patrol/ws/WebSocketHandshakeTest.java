@@ -91,6 +91,30 @@ class WebSocketHandshakeTest {
 	}
 
 	@Test
+	void loginAfterWsSessionCloses_isAllowedAgain() throws Exception {
+		String token = loginAndGetToken("user1", "123456");
+
+		ActiveConnection connection = openAndHoldSession(token);
+		connection.close();
+
+		webTestClient
+				.post()
+				.uri("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  \"username\": \"user1\",
+						  \"password\": \"123456\"
+						}
+						""")
+				.exchange()
+				.expectStatus().isOk()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody(AuthResponseDto.class)
+				.value(response -> assertThat(response.getToken()).isNotBlank());
+	}
+
+	@Test
 	void duplicateParallelWsConnection_isRejectedWithPolicyViolation() throws Exception {
 		String token = loginAndGetToken("user1", "123456");
 
@@ -212,4 +236,5 @@ class WebSocketHandshakeTest {
 		}
 	}
 }
+
 

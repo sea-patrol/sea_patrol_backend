@@ -9,8 +9,9 @@
 - Функции:
   - регистрация и логин пользователей;
   - JWT-аутентификация для защищенных маршрутов и WebSocket;
+  - lobby flow с room catalog, room creation и room join;
   - игровой цикл комнаты (физика, состояние игроков, ветер);
-  - чат (глобальный, групповой, личный).
+  - чат (server-scoped lobby chat, room chat, direct messages).
 
 ## 2. Технологический стек
 - Язык: `Java 25` (toolchain в Gradle).
@@ -26,24 +27,29 @@
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
+- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`).
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
-- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, `RoomCatalogService`, `RoomJoinService`, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/session` — single-session policy и room/lobby binding для WS-пользователей.
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
 - `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
 ## 4. Runtime-потоки
-### 4.1 HTTP / Auth
+### 4.1 HTTP / REST
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
+- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются после того, как в них не остаётся активных игроков и завершается room-bound reconnect grace.
+- `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation, после чего lobby WS-клиенты получают `ROOMS_UPDATED`.
+- `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
-- Остальные HTTP-маршруты требуют JWT в `Authorization: Bearer <token>`.
+- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms` и `POST /api/v1/rooms/{roomId}/join`, требуют JWT в `Authorization: Bearer <token>`.
 - Для WebSocket handshake (`GET /ws/...`) токен читается из query-параметра `token`.
 
 ### 4.3 WebSocket / Игра
@@ -51,13 +57,20 @@
 - При подключении пользователя:
   - `GameSessionRegistry` захватывает ownership active game session по `username`;
   - параллельное второе подключение для того же пользователя отклоняется `POLICY_VIOLATION`;
-  - инициализируется чат-поток;
-  - инициализируется игровой поток;
-  - пользователь помещается в default room из `game.room.default-room-name`;
-  - при первом подключении запускается игровой цикл комнаты.
+  - backend создаёт активную `lobby` session и автоматически добавляет пользователя в chat group `group:lobby`;
+  - public chat scope определяется сервером по session binding: в `lobby` сообщения публикуются только в `group:lobby`, а после room join только в `group:room:<roomId>`;
+  - клиентские `CHAT_JOIN` / `CHAT_LEAVE` не управляют lobby/room membership и игнорируются runtime-кодом;
+  - игровой room stream не стартует автоматически и room binding ещё не назначен.
+- Вход в игровую комнату выполняется через `POST /api/v1/rooms/{roomId}/join`:
+  - backend проверяет наличие активной lobby session;
+  - проверяет существование комнаты и лимит `maxPlayersPerRoom`;
+  - подготавливает игрока к join, переключает session binding на `roomId` и переносит chat membership из `group:lobby` в `group:room:<roomId>`;
+  - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
+  - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
-- После disconnect active session не удаляется мгновенно: username переводится в reconnect grace на `game.room.reconnect-grace-period`.
-- Текущий reconnect grace влияет на admission policy, но еще не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
+- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` хранит только временную metadata для room retention/reconnect policy.
+- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; при disconnect lobby WS-клиенты получают `ROOMS_UPDATED` с уменьшенным `currentPlayers`, а после истечения окна — ещё один `ROOMS_UPDATED`, если комната была удалена автоматически.
+- Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
   - `max-players-per-room`;
@@ -68,8 +81,12 @@
 - Предзаполненные пользователи в `InMemoryUserRepository`: `user1/user2/user3` с паролем `123456`.
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
-- `maxRooms` и `maxPlayersPerRoom` уже конфигурируются, но полноценный `RoomRegistry` и room admission flow еще будут реализованы отдельными backend tasks.
-- Reconnect grace уже участвует в single-session policy, но не покрывает полный resume room state.
+- `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
+- Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
+- Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
+- Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
+- `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
+- Reconnect grace уже участвует в empty-room cleanup policy и в повторном admission flow, но не держит пользователя в состоянии active session и не покрывает полный resume room state.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):
@@ -96,8 +113,8 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- Комнаты пока создаются через in-memory `computeIfAbsent`; полноценный `RoomRegistry` и enforcement room limits еще не реализованы.
-- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи; восстановление room membership/state еще не реализовано.
+- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
+- Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 
 
 

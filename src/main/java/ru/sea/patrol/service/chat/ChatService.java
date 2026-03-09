@@ -1,155 +1,150 @@
 package ru.sea.patrol.service.chat;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.ChatMessage;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatService {
 
-  private static final String GLOBAL_CHAT_GROUP = "global";
+	private static final String USER_CHAT_PREFIX = "user:";
+	private static final String LOBBY_CHAT_GROUP = "group:lobby";
+	private static final String ROOM_CHAT_PREFIX = "group:room:";
 
-  private final ObjectMapper objectMapper;
+	private final ObjectMapper objectMapper;
+	private final GameSessionRegistry sessionRegistry;
+	private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();
+	private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
 
-  // Groups: "global", "group:123", "user:alice"
-  private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();
+	public Flux<MessageOutput> initialize(String username) {
+		var user = addUser(username);
+		addUserToBaseGroups(user);
+		log.info("Player {} joined chat", username);
+		return user.getUserSink().asFlux()
+				.map(msg -> new MessageOutput(MessageType.CHAT_MESSAGE, msg));
+	}
 
-  private final Map<String, ChatUser> users = new ConcurrentHashMap<>();
+	public void cleanupUser(String username) {
+		var user = users.remove(username);
+		if (user != null) {
+			var userGroupNames = user.cleanupSubscriptions();
+			for (String groupName : userGroupNames) {
+				var group = groups.get(groupName);
+				if (group != null) {
+					group.left(username);
+					removeGroupIfEmpty(group);
+				}
+			}
+			log.info("Player {} left chat", username);
+		}
+	}
 
-  public Flux<MessageOutput> initialize(String username) {
-    var user = addUser(username);
-    userJoinChatMessage(user);
-    addUserToBaseGroups(user);
-    log.info("Player {} joined chat", username);
-    return user.getUserSink().asFlux()
-            .map(msg -> new MessageOutput(MessageType.CHAT_MESSAGE, msg));
-  }
+	public void joinToGroup(String username, String groupName) {
+		var user = users.get(username);
+		if (user != null) {
+			addToGroup(groupName, user);
+		}
+	}
 
+	public void leaveFromGroup(String username, String groupName) {
+		var group = groups.get(groupName);
+		if (group != null) {
+			group.left(username);
+			removeGroupIfEmpty(group);
+		}
+	}
 
-  public void cleanupUser(String username) {
-    var user = users.remove(username);
-    if (user != null) {
-      var userGroupNames = user.cleanupSubscriptions();
-      for (String groupName : userGroupNames) {
-        var group = groups.get(groupName);
-        if (group != null) {
-          group.left(username);
-          removeGroupIfEmpty(group);
-        }
-      }
-      userLeaveChatMessage(user);
-      log.info("Player {} left chat", username);
-    }
-  }
+	public void moveUserToRoom(String username, String roomId) {
+		leaveFromGroup(username, LOBBY_CHAT_GROUP);
+		joinToGroup(username, ROOM_CHAT_PREFIX + roomId);
+	}
 
-  public void joinToGroup(String username, String groupName) {
-    var user = users.get(username);
-    if (user != null) {
-      addToGroup(groupName, user);
-    }
-  }
+	public Mono<Void> handle(String username, MessageInput msg) {
+		switch (msg.getType()) {
+			case MessageType.CHAT_MESSAGE:
+				return handleChatMessage(username, msg.getPayload());
+			case MessageType.CHAT_JOIN, MessageType.CHAT_LEAVE:
+				log.debug("Ignoring client-managed chat membership change for user {} and type {}", username, msg.getType());
+				return Mono.empty();
+			default:
+				return Mono.empty();
+		}
+	}
 
-  public void leaveFromGroup(String username, String groupName) {
-    var group = groups.get(groupName);
-    if (group != null) {
-      group.left(username);
-      removeGroupIfEmpty(group);
-    }
-  }
+	public Mono<Void> handleChatMessage(String fromUserId, JsonNode payload) {
+		try {
+			ChatMessage msg = objectMapper.treeToValue(payload, ChatMessage.class);
+			msg.setFrom(fromUserId);
+			log.info("Got message: {}", msg);
+			String to = msg.getTo();
+			if (to == null) {
+				return Mono.error(new IllegalArgumentException("Missing 'to'"));
+			}
 
-  public Mono<Void> handle(String username, MessageInput msg) {
-    switch (msg.getType()) {
-      case MessageType.CHAT_MESSAGE:
-        return handleChatMessage(username, msg.getPayload());
-      case MessageType.CHAT_JOIN:
-        String groupId = msg.getPayload().asText();
-        joinToGroup(username, groupId);
-        return Mono.empty();
-      case MessageType.CHAT_LEAVE:
-        String gid = msg.getPayload().asText();
-        leaveFromGroup(username, gid);
-        return Mono.empty();
-      default:
-        return Mono.empty();
-    }
-  }
+			if (to.startsWith(USER_CHAT_PREFIX)) {
+				broadcast(to, msg);
+				broadcast(USER_CHAT_PREFIX + fromUserId, msg);
+			} else {
+				String scopedGroup = resolvePublicChatScope(fromUserId);
+				msg.setTo(scopedGroup);
+				broadcast(scopedGroup, msg);
+			}
+			return Mono.empty();
+		} catch (Exception e) {
+			return Mono.error(e);
+		}
+	}
 
-  public Mono<Void> handleChatMessage(String fromUserId, JsonNode payload) {
-    try {
-      ChatMessage msg = objectMapper.treeToValue(payload, ChatMessage.class);
-      msg.setFrom(fromUserId);
-      log.info("Got message: " + msg);
-      String to = msg.getTo();
-      if (to == null)
-        return Mono.error(new IllegalArgumentException("Missing 'to'"));
+	private String resolvePublicChatScope(String username) {
+		String roomId = sessionRegistry.activeRoomId(username);
+		if (roomId != null && !roomId.isBlank()) {
+			return ROOM_CHAT_PREFIX + roomId;
+		}
+		if (sessionRegistry.hasActiveLobbySession(username)) {
+			return LOBBY_CHAT_GROUP;
+		}
+		throw new IllegalArgumentException("No active public chat scope for user " + username);
+	}
 
-      if (GLOBAL_CHAT_GROUP.equals(to)) {
-        broadcast(GLOBAL_CHAT_GROUP, msg);
-      } else if (to.startsWith("group:")) {
-        broadcast(to, msg);
-      } else if (to.startsWith("user:")) {
-        broadcast(to, msg);
-        broadcast("user:" + fromUserId, msg); // копия отправителю
-      } else {
-        return Mono.error(new IllegalArgumentException("Invalid 'to' value"));
-      }
-      return Mono.empty();
-    } catch (Exception e) {
-      return Mono.error(e);
-    }
-  }
+	private ChatUser addUser(String userName) {
+		return users.computeIfAbsent(userName, ChatUser::new);
+	}
 
-  private ChatUser addUser(String userName) {
-      return users.computeIfAbsent(userName, k -> new ChatUser(userName));
-  }
+	private void addUserToBaseGroups(ChatUser user) {
+		addToGroup(USER_CHAT_PREFIX + user.getName(), user);
+		addToGroup(LOBBY_CHAT_GROUP, user);
+	}
 
-  private void addUserToBaseGroups(ChatUser user) {
-    addToGroup( GLOBAL_CHAT_GROUP, user);
-    addToGroup( "user:" + user.getName(), user);
-  }
+	private void addToGroup(String groupName, ChatUser user) {
+		var group = getOrCreateGroup(groupName);
+		group.join(user);
+	}
 
-  private void addToGroup(String groupName, ChatUser user) {
-    var group = getOrCreateGroup(groupName);
-    group.join(user);
-  }
+	private ChatGroup getOrCreateGroup(String groupName) {
+		return groups.computeIfAbsent(groupName, ChatGroup::new);
+	}
 
-  private ChatGroup getOrCreateGroup(String groupName) {
-    return groups.computeIfAbsent(groupName, ChatGroup::new);
-  }
+	private void broadcast(String groupName, ChatMessage msg) {
+		var group = getOrCreateGroup(groupName);
+		group.send(msg);
+	}
 
-  private void broadcast(String groupName, ChatMessage msg) {
-    var group = getOrCreateGroup(groupName);
-    group.send(msg);
-  }
-
-  private void userJoinChatMessage(ChatUser user) {
-    if (user != null) {
-      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " joined the chat"));
-    }
-  }
-
-  private void userLeaveChatMessage(ChatUser user) {
-    if (user != null) {
-      broadcast(GLOBAL_CHAT_GROUP, new ChatMessage("system", GLOBAL_CHAT_GROUP, user.getName() + " left the chat"));
-    }
-  }
-
-  private void removeGroupIfEmpty(ChatGroup group) {
-    if (group != null && group.isEmpty()) {
-      groups.remove(group.getName());
-    }
-  }
+	private void removeGroupIfEmpty(ChatGroup group) {
+		if (group != null && group.isEmpty()) {
+			groups.remove(group.getName());
+		}
+	}
 }
