@@ -14,28 +14,49 @@ class RoomRegistryTest {
 	@Test
 	void getOrCreateRoom_returnsExistingRoom_andTracksSingleRegistryEntry() {
 		RoomRegistry registry = new RoomRegistry(defaultProperties());
+		try {
+			GameRoom first = registry.getOrCreateRoom("sandbox-1");
+			GameRoom second = registry.getOrCreateRoom("sandbox-1");
 
-		GameRoom first = registry.getOrCreateRoom("sandbox-1");
-		GameRoom second = registry.getOrCreateRoom("sandbox-1");
-
-		assertThat(first).isSameAs(second);
-		assertThat(registry.roomCount()).isEqualTo(1);
-		assertThat(registry.hasRoom("sandbox-1")).isTrue();
+			assertThat(first).isSameAs(second);
+			assertThat(registry.roomCount()).isEqualTo(1);
+			assertThat(registry.hasRoom("sandbox-1")).isTrue();
+		} finally {
+			registry.shutdown();
+		}
 	}
 
 	@Test
-	void removeRoomIfEmpty_removesRegistryEntry_afterLastPlayerLeaves() {
-		RoomRegistry registry = new RoomRegistry(defaultProperties());
-		GameRoom room = registry.getOrCreateRoom("sandbox-1");
-		room.join(createPlayer("alice"));
-		room.start(false);
+	void createRoom_removesEmptyRegistryEntry_afterIdleTimeout() throws Exception {
+		RoomRegistry registry = new RoomRegistry(shortTimeoutProperties());
+		try {
+			registry.createRoom("Sandbox 1", "caribbean-01", "Caribbean Sea");
 
-		room.leave("alice");
-		boolean removed = registry.removeRoomIfEmpty("sandbox-1");
+			assertThat(registry.hasRoom("sandbox-1")).isTrue();
+			Thread.sleep(180L);
 
-		assertThat(removed).isTrue();
-		assertThat(registry.hasRoom("sandbox-1")).isFalse();
-		assertThat(registry.roomCount()).isZero();
+			assertThat(registry.hasRoom("sandbox-1")).isFalse();
+			assertThat(registry.roomCount()).isZero();
+		} finally {
+			registry.shutdown();
+		}
+	}
+
+	@Test
+	void scheduledCleanup_isCanceled_whenPlayerJoinsBeforeTimeout() throws Exception {
+		RoomRegistry registry = new RoomRegistry(shortTimeoutProperties());
+		try {
+			GameRoom room = registry.getOrCreateRoom("sandbox-1");
+			room.join(createPlayer("alice"));
+			registry.cancelEmptyRoomCleanup("sandbox-1");
+
+			Thread.sleep(180L);
+
+			assertThat(registry.hasRoom("sandbox-1")).isTrue();
+			assertThat(registry.roomCount()).isEqualTo(1);
+		} finally {
+			registry.shutdown();
+		}
 	}
 
 	private static GameRoomProperties defaultProperties() {
@@ -44,7 +65,19 @@ class RoomRegistryTest {
 				5,
 				100,
 				Duration.ofMillis(100),
+				Duration.ofSeconds(15),
 				Duration.ofSeconds(30)
+		);
+	}
+
+	private static GameRoomProperties shortTimeoutProperties() {
+		return new GameRoomProperties(
+				"main",
+				5,
+				100,
+				Duration.ofMillis(100),
+				Duration.ofSeconds(15),
+				Duration.ofMillis(100)
 		);
 	}
 

@@ -11,7 +11,6 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import ru.sea.patrol.service.game.GameRoomProperties;
-import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 
 @Service
@@ -23,7 +22,6 @@ public class GameSessionRegistry {
 	private final long reconnectGracePeriodMillis;
 	private final ScheduledExecutorService scheduler;
 	private final RoomRegistry roomRegistry;
-	private final RoomCatalogWsService roomCatalogWsService;
 	private final ApplicationEventPublisher eventPublisher;
 	private final Map<String, ActiveSessionEntry> activeSessions = new ConcurrentHashMap<>();
 	private final Map<String, GraceSessionEntry> reconnectGraceSessions = new ConcurrentHashMap<>();
@@ -31,13 +29,11 @@ public class GameSessionRegistry {
 	public GameSessionRegistry(
 			GameRoomProperties roomProperties,
 			RoomRegistry roomRegistry,
-			RoomCatalogWsService roomCatalogWsService,
 			ApplicationEventPublisher eventPublisher
 	) {
 		this.reconnectGracePeriodMillis = roomProperties.reconnectGracePeriod().toMillis();
 		this.scheduler = Executors.newSingleThreadScheduledExecutor(sessionThreadFactory());
 		this.roomRegistry = roomRegistry;
-		this.roomCatalogWsService = roomCatalogWsService;
 		this.eventPublisher = eventPublisher;
 	}
 
@@ -152,9 +148,7 @@ public class GameSessionRegistry {
 		if (hasReconnectGraceInRoom(roomId)) {
 			return;
 		}
-		if (roomRegistry.removeRoomIfEmpty(roomId)) {
-			roomCatalogWsService.publishRoomsUpdated();
-		}
+		roomRegistry.scheduleEmptyRoomCleanupIfNeeded(roomId);
 	}
 
 	private static void cancel(ScheduledFuture<?> future) {

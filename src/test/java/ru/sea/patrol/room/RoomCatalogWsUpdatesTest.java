@@ -29,7 +29,10 @@ import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = "game.room.reconnect-grace-period=120ms"
+		properties = {
+				"game.room.reconnect-grace-period=120ms",
+				"game.room.empty-room-idle-timeout=120ms"
+		}
 )
 @AutoConfigureWebTestClient
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
@@ -118,6 +121,17 @@ class RoomCatalogWsUpdatesTest {
 				assertThat(findRoom(joinUpdatePayload, "sandbox-1").path("currentPlayers").asInt()).isEqualTo(1);
 
 				roomPlayerConnection.close();
+
+				JsonNode emptyRoomPayload = awaitCatalogMessage(
+						lobbyObserverConnection,
+						MessageType.ROOMS_UPDATED,
+						catalog -> {
+							JsonNode room = findRoom(catalog, "sandbox-1");
+							return room != null && room.path("currentPlayers").asInt() == 0;
+						},
+						Duration.ofSeconds(3)
+				);
+				assertThat(findRoom(emptyRoomPayload, "sandbox-1").path("currentPlayers").asInt()).isZero();
 
 				JsonNode cleanupPayload = awaitCatalogMessage(
 						lobbyObserverConnection,

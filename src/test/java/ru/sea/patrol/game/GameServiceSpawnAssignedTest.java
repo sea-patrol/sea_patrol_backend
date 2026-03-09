@@ -32,14 +32,15 @@ class GameServiceSpawnAssignedTest {
 				5,
 				100,
 				Duration.ofMillis(100),
-				Duration.ofSeconds(15)
+				Duration.ofSeconds(15),
+				Duration.ofSeconds(30)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		ApplicationEventPublisher eventPublisher = event -> {
 		};
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService, eventPublisher);
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, eventPublisher);
 		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry, new SpawnService());
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 1", "caribbean-01", "Caribbean Sea");
 		List<MessageOutput> messages = new CopyOnWriteArrayList<>();
@@ -76,7 +77,7 @@ class GameServiceSpawnAssignedTest {
 				activeRoom.stop();
 			}
 			sessionRegistry.shutdown();
+			roomRegistry.shutdown();
 		}
 	}
 }
-

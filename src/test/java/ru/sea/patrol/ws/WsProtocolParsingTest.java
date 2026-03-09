@@ -74,14 +74,15 @@ class WsProtocolParsingTest {
 				5,
 				100,
 				Duration.ofMillis(100),
-				Duration.ofSeconds(15)
+				Duration.ofSeconds(15),
+				Duration.ofSeconds(30)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, roomProperties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		ApplicationEventPublisher eventPublisher = event -> {
 		};
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, roomCatalogWsService, eventPublisher);
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, eventPublisher);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper, sessionRegistry),
 				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry, new SpawnService()),
@@ -106,4 +107,3 @@ class WsProtocolParsingTest {
 		}
 	}
 }
-

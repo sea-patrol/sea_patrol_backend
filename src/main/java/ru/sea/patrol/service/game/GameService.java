@@ -63,6 +63,10 @@ public class GameService {
 		return roomProperties.reconnectGracePeriod();
 	}
 
+	public Duration getEmptyRoomIdleTimeout() {
+		return roomProperties.emptyRoomIdleTimeout();
+	}
+
 	public long getRoomUpdatePeriodMillis() {
 		return roomProperties.updatePeriod().toMillis();
 	}
@@ -73,6 +77,7 @@ public class GameService {
 			throw new IllegalArgumentException("Room not found: " + roomId);
 		}
 		room.join(retrievePlayer(playerName), false);
+		roomRegistry.cancelEmptyRoomCleanup(roomId);
 	}
 
 	public SpawnAssignedResponseDto emitInitialSpawnAssigned(String playerName, String roomId) {
@@ -136,8 +141,10 @@ public class GameService {
 		}
 		int beforeCount = room.getPlayerCount();
 		room.leave(playerName);
-		if (!sessionRegistry.hasReconnectGraceInRoom(roomName)) {
-			roomRegistry.removeRoomIfEmpty(roomName);
+		if (sessionRegistry.hasReconnectGraceInRoom(roomName)) {
+			roomRegistry.cancelEmptyRoomCleanup(roomName);
+		} else {
+			roomRegistry.scheduleEmptyRoomCleanupIfNeeded(roomName);
 		}
 		return room.getPlayerCount() != beforeCount || !roomRegistry.hasRoom(roomName);
 	}
@@ -223,5 +230,3 @@ public class GameService {
 				.setLength(26f));
 	}
 }
-
-
