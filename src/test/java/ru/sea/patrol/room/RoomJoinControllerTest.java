@@ -136,11 +136,21 @@ class RoomJoinControllerTest {
 			assertThat(joinedMessage.path("payload").path("status").asText()).isEqualTo("JOINED");
 
 			JsonNode spawnAssignedMessage = awaitMessageOfType(connection, MessageType.SPAWN_ASSIGNED, Duration.ofSeconds(3));
+			double spawnX = spawnAssignedMessage.path("payload").path("x").asDouble();
+			double spawnZ = spawnAssignedMessage.path("payload").path("z").asDouble();
+			double spawnAngle = spawnAssignedMessage.path("payload").path("angle").asDouble();
 			assertThat(spawnAssignedMessage.path("payload").path("roomId").asText()).isEqualTo(room.id());
 			assertThat(spawnAssignedMessage.path("payload").path("reason").asText()).isEqualTo("INITIAL");
-			assertThat(spawnAssignedMessage.path("payload").path("x").asDouble()).isEqualTo(0.0);
-			assertThat(spawnAssignedMessage.path("payload").path("z").asDouble()).isEqualTo(0.0);
-			assertThat(spawnAssignedMessage.path("payload").path("angle").asDouble()).isEqualTo(0.0);
+			assertThat(spawnX).isBetween(-30.0, 30.0);
+			assertThat(spawnZ).isBetween(-30.0, 30.0);
+			assertThat(spawnAngle).isEqualTo(0.0);
+
+			JsonNode initMessage = awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+			JsonNode currentPlayer = initMessage.path("payload").path("players").get(0);
+			assertThat(currentPlayer.path("name").asText()).isEqualTo("user1");
+			assertThat(currentPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(currentPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(currentPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
 		}
 	}
 
@@ -201,8 +211,8 @@ class RoomJoinControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.bodyValue("""
 						{
-						  "username": "%s",
-						  "password": "%s"
+						  \"username\": \"%s\",
+						  \"password\": \"%s\"
 						}
 						""".formatted(username, password))
 				.exchange()
@@ -261,3 +271,4 @@ class RoomJoinControllerTest {
 		}
 	}
 }
+

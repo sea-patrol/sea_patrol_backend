@@ -22,7 +22,7 @@ class GameRoomCleanupPolicyTest {
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
-		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry);
+		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry, new ru.sea.patrol.service.game.SpawnService());
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 1", "caribbean-01", "Caribbean Sea");
 
 		gameService.prepareRoomJoin("alice", room.id());
@@ -39,7 +39,7 @@ class GameRoomCleanupPolicyTest {
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
-		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry);
+		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry, new ru.sea.patrol.service.game.SpawnService());
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 2", "caribbean-01", "Caribbean Sea");
 
 		sessionRegistry.claimSession("alice", "s1");

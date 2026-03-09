@@ -13,6 +13,7 @@ import ru.sea.patrol.service.game.GameService;
 import ru.sea.patrol.service.game.RoomCatalogService;
 import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
+import ru.sea.patrol.service.game.SpawnService;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.ws.protocol.MessageType;
@@ -80,7 +81,7 @@ class WsProtocolParsingTest {
 		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, roomCatalogWsService);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper, sessionRegistry),
-				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry),
+				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry, new SpawnService()),
 				roomCatalogWsService,
 				objectMapper,
 				sessionRegistry
@@ -102,4 +103,3 @@ class WsProtocolParsingTest {
 		}
 	}
 }
-

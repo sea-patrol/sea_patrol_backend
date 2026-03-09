@@ -2,7 +2,6 @@ package ru.sea.patrol.service.game;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +13,7 @@ import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.dto.SpawnAssignedResponseDto;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -26,7 +26,7 @@ public class GameService {
 	private final GameRoomProperties roomProperties;
 	private final RoomRegistry roomRegistry;
 	private final GameSessionRegistry sessionRegistry;
-	private final Random random = new Random();
+	private final SpawnService spawnService;
 
 	private final Map<String, Player> players = new ConcurrentHashMap<>();
 
@@ -70,6 +70,18 @@ public class GameService {
 			throw new IllegalArgumentException("Room not found: " + roomId);
 		}
 		room.join(retrievePlayer(playerName), false);
+	}
+
+	public SpawnAssignedResponseDto assignInitialSpawn(String playerName, String roomId) {
+		var player = retrievePlayer(playerName);
+		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn();
+		player.setX((float) spawnPoint.x())
+				.setZ((float) spawnPoint.z())
+				.setAngle((float) spawnPoint.angle());
+		if (player.getShip() != null) {
+			player.getShip().setFrontendTransform((float) spawnPoint.x(), (float) spawnPoint.z(), (float) spawnPoint.angle());
+		}
+		return new SpawnAssignedResponseDto(roomId, "INITIAL", spawnPoint.x(), spawnPoint.z(), spawnPoint.angle());
 	}
 
 	public void activateRoomJoin(String playerName, String roomId) {

@@ -1,7 +1,11 @@
 package ru.sea.patrol.service.game;
 
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.physics.box2d.*;
+import com.badlogic.gdx.physics.box2d.Body;
+import com.badlogic.gdx.physics.box2d.BodyDef;
+import com.badlogic.gdx.physics.box2d.FixtureDef;
+import com.badlogic.gdx.physics.box2d.PolygonShape;
+import com.badlogic.gdx.physics.box2d.World;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 
 public class PlayerShipInstance {
@@ -17,7 +21,7 @@ public class PlayerShipInstance {
   public PlayerShipInstance(World world, Player player) {
     BodyDef def = new BodyDef();
     def.type = BodyDef.BodyType.DynamicBody;
-    def.position.set(player.getX(), player.getZ());
+    def.position.set(player.getZ(), player.getX());
     def.angle = player.getAngle();
     body = world.createBody(def);
 
@@ -28,7 +32,7 @@ public class PlayerShipInstance {
     sensorDef.density = 1f;
     sensorDef.restitution = 0.1f;
     sensorDef.friction = 0.0f;
-    sensorDef.isSensor = false; // ← Сенсор!
+    sensorDef.isSensor = false;
     body.createFixture(sensorDef);
     shape.dispose();
 
@@ -52,14 +56,12 @@ public class PlayerShipInstance {
     }
     if (input.down()) thrust -= 0.5f;
 
-    // Простая модель: сила пропорциональна cos(угол между ветром и парусом)
     float shipAngle = body.getAngle();
     Vector2 forceVector = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
             .scl(thrust * this.force);
 
     body.applyForceToCenter(forceVector, true);
 
-    // Поворот
     if (input.left()) body.applyTorque(TURN_FORCE_RATIO * force, true);
     if (input.right()) body.applyTorque(-TURN_FORCE_RATIO * force, true);
   }
@@ -76,10 +78,18 @@ public class PlayerShipInstance {
     return body.getAngularVelocity();
   }
 
-  public float getVelocity() {return body.getLinearVelocity().len();}
+  public float getVelocity() {
+    return body.getLinearVelocity().len();
+  }
 
   public float getAngle() {
     return body.getAngle();
+  }
+
+  public void setFrontendTransform(float x, float z, float angle) {
+    body.setTransform(z, x, angle);
+    body.setLinearVelocity(0f, 0f);
+    body.setAngularVelocity(0f);
   }
 
   public void dispose() {

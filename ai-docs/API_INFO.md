@@ -180,7 +180,7 @@ Response `200 OK`:
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
 - после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
-- текущий `SPAWN_ASSIGNED` использует временный authoritative placeholder spawn `(x=0.0, z=0.0, angle=0.0)` до отдельных задач по spawn logic.
+- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`.
 
 Ошибки:
 - `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
@@ -366,16 +366,17 @@ Payload:
 {
   "roomId": "sandbox-1",
   "reason": "INITIAL",
-  "x": 0.0,
-  "z": 0.0,
+  "x": 12.5,
+  "z": -8.0,
   "angle": 0.0
 }
 ```
 
 Примечания:
 - spawn/respawn остаётся server-authoritative;
-- для текущего backend runtime initial join отправляет placeholder coordinates `(0.0, 0.0, 0.0)`;
-- отдельная spawn logic и non-placeholder assignment остаются следующими backend задачами.
+- initial spawn для current runtime вычисляется backend'ом как random offset вокруг `(0, 0)`;
+- MVP bounds для initial spawn сейчас зафиксированы как `x/z in [-30.0, 30.0]`;
+- `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`.
 
 ### `PLAYER_JOIN`
 Payload (`PlayerInfo`):
@@ -385,8 +386,8 @@ Payload (`PlayerInfo`):
   "health": 500,
   "maxHealth": 500,
   "velocity": 0.0,
-  "x": 0.0,
-  "z": 0.0,
+  "x": 12.5,
+  "z": -8.0,
   "angle": 0.0,
   "model": "model",
   "height": 4.0,
@@ -410,8 +411,8 @@ Payload:
       "health": 500,
       "maxHealth": 500,
       "velocity": 0.0,
-      "x": 0.0,
-      "z": 0.0,
+      "x": 12.5,
+      "z": -8.0,
       "angle": 0.0,
       "model": "model",
       "height": 4.0,
@@ -433,8 +434,8 @@ Payload:
       "name": "user1",
       "health": 500,
       "velocity": 0.0,
-      "x": 0.0,
-      "z": 0.0,
+      "x": 12.5,
+      "z": -8.0,
       "angle": 0.0
     }
   ]
@@ -472,6 +473,8 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
 
 
 
