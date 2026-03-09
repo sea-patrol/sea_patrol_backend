@@ -8,7 +8,6 @@ import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
-import ru.sea.patrol.ws.protocol.dto.SpawnAssignedResponseDto;
 
 @Service
 public class RoomJoinService {
@@ -68,9 +67,8 @@ public class RoomJoinService {
 				roomProperties.maxPlayersPerRoom(),
 				"JOINED"
 		);
-		SpawnAssignedResponseDto spawnAssignment = gameService.assignInitialSpawn(username, roomEntry.id());
 		gameService.replyToPlayer(username, new MessageOutput(MessageType.ROOM_JOINED, response));
-		gameService.replyToPlayer(username, new MessageOutput(MessageType.SPAWN_ASSIGNED, spawnAssignment));
+		gameService.emitInitialSpawnAssigned(username, roomEntry.id());
 		gameService.activateRoomJoin(username, roomId);
 		return response;
 	}

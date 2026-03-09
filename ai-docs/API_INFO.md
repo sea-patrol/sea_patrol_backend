@@ -180,7 +180,8 @@ Response `200 OK`:
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
 - после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
-- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`.
+- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`;
+- backend также держит отдельный respawn emission path с тем же payload shape и `reason=RESPAWN` для active room player.
 
 Ошибки:
 - `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
@@ -376,7 +377,8 @@ Payload:
 - spawn/respawn остаётся server-authoritative;
 - initial spawn для current runtime вычисляется backend'ом как random offset вокруг `(0, 0)`;
 - MVP bounds для initial spawn сейчас зафиксированы как `x/z in [-30.0, 30.0]`;
-- `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`.
+- `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`;
+- текущий runtime уже эмитит `INITIAL` в room join flow и умеет эмитить `RESPAWN` через отдельный backend respawn path; death/combat trigger остаётся задачей следующих wave'ов.
 
 ### `PLAYER_JOIN`
 Payload (`PlayerInfo`):
@@ -473,6 +475,7 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
 
 
 

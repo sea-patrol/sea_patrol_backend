@@ -14,6 +14,7 @@ import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 import ru.sea.patrol.ws.protocol.dto.SpawnAssignedResponseDto;
+import ru.sea.patrol.ws.protocol.dto.SpawnReason;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -72,16 +73,19 @@ public class GameService {
 		room.join(retrievePlayer(playerName), false);
 	}
 
-	public SpawnAssignedResponseDto assignInitialSpawn(String playerName, String roomId) {
-		var player = retrievePlayer(playerName);
-		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn();
-		player.setX((float) spawnPoint.x())
-				.setZ((float) spawnPoint.z())
-				.setAngle((float) spawnPoint.angle());
-		if (player.getShip() != null) {
-			player.getShip().setFrontendTransform((float) spawnPoint.x(), (float) spawnPoint.z(), (float) spawnPoint.angle());
+	public SpawnAssignedResponseDto emitInitialSpawnAssigned(String playerName, String roomId) {
+		return emitSpawnAssigned(playerName, roomId, SpawnReason.INITIAL);
+	}
+
+	public SpawnAssignedResponseDto respawnPlayer(String playerName) {
+		Player player = requireExistingPlayer(playerName);
+		GameRoom room = player.getRoom();
+		if (room == null) {
+			throw new IllegalStateException("Player is not in an active room: " + playerName);
 		}
-		return new SpawnAssignedResponseDto(roomId, "INITIAL", spawnPoint.x(), spawnPoint.z(), spawnPoint.angle());
+		player.setHealth(player.getMaxHealth());
+		player.setVelocity(0f);
+		return emitSpawnAssigned(playerName, room.getName(), SpawnReason.RESPAWN);
 	}
 
 	public void activateRoomJoin(String playerName, String roomId) {
@@ -125,6 +129,29 @@ public class GameService {
 		return false;
 	}
 
+	private SpawnAssignedResponseDto emitSpawnAssigned(String playerName, String roomId, SpawnReason reason) {
+		SpawnAssignedResponseDto spawnAssignment = assignSpawn(playerName, roomId, reason);
+		replyToPlayer(playerName, new MessageOutput(MessageType.SPAWN_ASSIGNED, spawnAssignment));
+		return spawnAssignment;
+	}
+
+	private SpawnAssignedResponseDto assignSpawn(String playerName, String roomId, SpawnReason reason) {
+		Player player = requireExistingPlayer(playerName);
+		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn();
+		applySpawn(player, spawnPoint);
+		return new SpawnAssignedResponseDto(roomId, reason, spawnPoint.x(), spawnPoint.z(), spawnPoint.angle());
+	}
+
+	private void applySpawn(Player player, SpawnPoint spawnPoint) {
+		player.setX((float) spawnPoint.x())
+				.setZ((float) spawnPoint.z())
+				.setAngle((float) spawnPoint.angle())
+				.setVelocity(0f);
+		if (player.getShip() != null) {
+			player.getShip().setFrontendTransform((float) spawnPoint.x(), (float) spawnPoint.z(), (float) spawnPoint.angle());
+		}
+	}
+
 	private Mono<Void> handlePlayerInput(String username, JsonNode payload) {
 		try {
 			PlayerInputMessage msg = objectMapper.treeToValue(payload, PlayerInputMessage.class);
@@ -137,6 +164,14 @@ public class GameService {
 		} catch (Exception e) {
 			return Mono.error(e);
 		}
+	}
+
+	private Player requireExistingPlayer(String playerName) {
+		Player player = players.get(playerName);
+		if (player == null) {
+			throw new IllegalStateException("Player is not initialized: " + playerName);
+		}
+		return player;
 	}
 
 	private Player retrievePlayer(String playerName) {
