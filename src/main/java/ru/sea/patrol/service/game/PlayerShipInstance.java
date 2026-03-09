@@ -100,6 +100,12 @@ public class PlayerShipInstance {
     this.input = input;
   }
 
+  public void freeze() {
+    input = new PlayerInputMessage(false, false, false, false);
+    body.setLinearVelocity(0f, 0f);
+    body.setAngularVelocity(0f);
+  }
+
   public float getFrontendX() {
     return body.getPosition().y;
   }

@@ -13,6 +13,7 @@ import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
 import ru.sea.patrol.ws.protocol.dto.SpawnAssignedResponseDto;
 import ru.sea.patrol.ws.protocol.dto.SpawnReason;
 import tools.jackson.databind.JsonNode;
@@ -33,6 +34,7 @@ public class GameService {
 
 	public Flux<MessageOutput> initialize(String playerName) {
 		var player = retrievePlayer(playerName);
+		player.resetSessionSink();
 		return player.getSink().asFlux();
 	}
 
@@ -102,6 +104,26 @@ public class GameService {
 		room.start();
 	}
 
+	public void resumeRoomSession(String playerName, String roomId) {
+		var roomEntry = roomRegistry.findEntry(roomId);
+		var player = players.get(playerName);
+		if (roomEntry == null || player == null || player.getRoom() == null || !roomId.equals(player.getRoom().getName())) {
+			log.warn("Unable to resume room session for player {} in room {}", playerName, roomId);
+			return;
+		}
+
+		RoomJoinResponseDto response = new RoomJoinResponseDto(
+				roomEntry.id(),
+				roomEntry.mapId(),
+				roomEntry.mapName(),
+				roomEntry.room().getPlayerCount(),
+				roomProperties.maxPlayersPerRoom(),
+				"JOINED"
+		);
+		replyToPlayer(playerName, new MessageOutput(MessageType.ROOM_JOINED, response));
+		roomEntry.room().resumePlayer(player);
+	}
+
 	public void replyToPlayer(String playerName, MessageOutput message) {
 		var player = retrievePlayer(playerName);
 		player.reply(message);
@@ -126,6 +148,19 @@ public class GameService {
 		if (player != null && player.getRoom() != null) {
 			return leaveRoom(playerName, player.getRoom().getName());
 		}
+		return false;
+	}
+
+	public boolean disconnectPlayer(String playerName) {
+		var player = players.get(playerName);
+		if (player == null) {
+			return false;
+		}
+		if (player.getRoom() != null) {
+			player.prepareForDisconnectGrace();
+			return false;
+		}
+		players.remove(playerName);
 		return false;
 	}
 
@@ -188,3 +223,5 @@ public class GameService {
 				.setLength(26f));
 	}
 }
+
+

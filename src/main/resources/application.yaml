@@ -18,4 +18,5 @@ game:
     update-period: ${GAME_ROOM_UPDATE_PERIOD:100ms}
     max-rooms: ${GAME_MAX_ROOMS:5}
     max-players-per-room: ${GAME_MAX_PLAYERS_PER_ROOM:100}
-    reconnect-grace-period: ${GAME_RECONNECT_GRACE_PERIOD:30s}
+    reconnect-grace-period: ${GAME_RECONNECT_GRACE_PERIOD:15s}
+

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
 import ru.sea.patrol.service.game.GameRoom;
@@ -31,12 +32,14 @@ class GameServiceSpawnAssignedTest {
 				5,
 				100,
 				Duration.ofMillis(100),
-				Duration.ofSeconds(30)
+				Duration.ofSeconds(15)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService);
+		ApplicationEventPublisher eventPublisher = event -> {
+		};
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, roomCatalogWsService, eventPublisher);
 		GameService gameService = new GameService(new ObjectMapper(), properties, roomRegistry, sessionRegistry, new SpawnService());
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 1", "caribbean-01", "Caribbean Sea");
 		List<MessageOutput> messages = new CopyOnWriteArrayList<>();
@@ -76,3 +79,4 @@ class GameServiceSpawnAssignedTest {
 		}
 	}
 }
+

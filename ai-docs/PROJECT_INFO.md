@@ -68,9 +68,10 @@
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
-- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` хранит только временную metadata для room retention/reconnect policy.
-- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; при disconnect lobby WS-клиенты получают `ROOMS_UPDATED` с уменьшенным `currentPlayers`, а после истечения окна — ещё один `ROOMS_UPDATED`, если комната была удалена автоматически.
-- Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
+- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`) удерживает room-bound runtime state для controlled resume.
+- Если пользователь отключился из комнаты и после этого она осталась без других активных игроков, backend удерживает её в `RoomRegistry` до окончания reconnect grace; `currentPlayers` в lobby catalog не уменьшается мгновенно, потому что disconnected player остаётся частью retained room state до timeout.
+- Reconnect в течение grace восстанавливает ту же room binding и текущего игрока в той же комнате: backend повторно шлёт `ROOM_JOINED` и `INIT_GAME_STATE`, но не делает новый spawn.
+- Если grace истёк, backend выполняет final cleanup retained player/runtime state и только после этого удаляет пустую комнату из registry/catalog.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
   - `max-players-per-room`;
@@ -115,6 +116,7 @@
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
+
 
 
 

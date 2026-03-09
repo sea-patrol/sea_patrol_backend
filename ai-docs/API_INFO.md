@@ -193,9 +193,10 @@ Response `200 OK`:
 ### Session policy
 - Backend допускает только одну активную игровую WebSocket-сессию на `username`.
 - Повторное параллельное подключение с тем же пользователем отклоняется закрытием `POLICY_VIOLATION` с reason, содержащим `SEAPATROL_DUPLICATE_SESSION`.
-- После disconnect active session ownership снимается сразу, а username переводится в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новый login и новое WS-подключение разрешаются.
-- Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
-- Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
+- После disconnect active session ownership снимается сразу, а username переводится в reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`); в этот интервал новый login и новое WS-подключение разрешаются.
+- Если disconnect произошёл из игровой комнаты, backend удерживает room binding и player runtime state до истечения grace; lobby room catalog не уменьшает `currentPlayers` мгновенно и обновляется только после reconnect либо final cleanup.
+- Reconnect в течение grace восстанавливает ту же room binding без повторного `POST /api/v1/rooms/{roomId}/join`: backend повторно шлёт `ROOM_JOINED`, затем `INIT_GAME_STATE`, не эмитит новый `SPAWN_ASSIGNED` и возвращает игрока в ту же комнату.
+- Если grace истёк, backend удаляет retained player из room runtime state; следующий WS handshake стартует как новая `lobby` session.
 - После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
 - Public chat scope для `lobby` / `room` управляется только сервером по session binding; клиентские `CHAT_JOIN` / `CHAT_LEAVE` не могут подписать пользователя на чужую room group.
 - При lobby WebSocket-подключении backend автоматически отправляет `ROOMS_SNAPSHOT` с текущим room catalog.
@@ -475,6 +476,7 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
 
 
 

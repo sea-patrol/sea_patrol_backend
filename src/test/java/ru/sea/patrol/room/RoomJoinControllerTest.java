@@ -6,6 +6,8 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -69,7 +71,7 @@ class RoomJoinControllerTest {
 	void joinRoom_notFound_withLobbyWsSession_returns404() throws Exception {
 		String token = loginAndGetToken("user1", "123456");
 
-		try (ActiveWsConnection connection = openLobbySession(token)) {
+		try (ActiveWsConnection connection = openSession(token)) {
 			webTestClient
 					.post()
 					.uri("/api/v1/rooms/{roomId}/join", "missing-room")
@@ -93,7 +95,7 @@ class RoomJoinControllerTest {
 			gameRoom.join(createPlayer("bot-" + i));
 		}
 
-		try (ActiveWsConnection connection = openLobbySession(token)) {
+		try (ActiveWsConnection connection = openSession(token)) {
 			webTestClient
 					.post()
 					.uri("/api/v1/rooms/{roomId}/join", room.id())
@@ -113,7 +115,7 @@ class RoomJoinControllerTest {
 		String token = loginAndGetToken("user1", "123456");
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 7", "caribbean-01", "Caribbean Sea");
 
-		try (ActiveWsConnection connection = openLobbySession(token)) {
+		try (ActiveWsConnection connection = openSession(token)) {
 			webTestClient
 					.post()
 					.uri("/api/v1/rooms/{roomId}/join", room.id())
@@ -154,7 +156,49 @@ class RoomJoinControllerTest {
 		}
 	}
 
-	private ActiveWsConnection openLobbySession(String token) throws Exception {
+	@Test
+	void reconnectWithinGrace_resumesSameRoomWithoutNewSpawn() throws Exception {
+		String token = loginAndGetToken("user1", "123456");
+		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox Resume", "caribbean-01", "Caribbean Sea");
+		double spawnX;
+		double spawnZ;
+		double spawnAngle;
+
+		try (ActiveWsConnection connection = openSession(token)) {
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/join", room.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isOk();
+
+			awaitMessageOfType(connection, MessageType.ROOM_JOINED, Duration.ofSeconds(3));
+			JsonNode spawnAssignedMessage = awaitMessageOfType(connection, MessageType.SPAWN_ASSIGNED, Duration.ofSeconds(3));
+			spawnX = spawnAssignedMessage.path("payload").path("x").asDouble();
+			spawnZ = spawnAssignedMessage.path("payload").path("z").asDouble();
+			spawnAngle = spawnAssignedMessage.path("payload").path("angle").asDouble();
+			awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+		}
+
+		try (ActiveWsConnection resumedConnection = openSession(token)) {
+			List<MessageType> seenTypes = new ArrayList<>();
+			JsonNode resumedJoinMessage = awaitMessageOfType(resumedConnection, MessageType.ROOM_JOINED, Duration.ofSeconds(3), seenTypes);
+			assertThat(resumedJoinMessage.path("payload").path("roomId").asText()).isEqualTo(room.id());
+
+			JsonNode resumedInitMessage = awaitMessageOfType(resumedConnection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3), seenTypes);
+			JsonNode resumedPlayer = resumedInitMessage.path("payload").path("players").get(0);
+			assertThat(seenTypes).doesNotContain(MessageType.SPAWN_ASSIGNED, MessageType.ROOMS_SNAPSHOT);
+			assertThat(resumedInitMessage.path("payload").path("room").asText()).isEqualTo(room.id());
+			assertThat(resumedPlayer.path("name").asText()).isEqualTo("user1");
+			assertThat(resumedPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(resumedPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(resumedPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
+		}
+	}
+
+	private ActiveWsConnection openSession(String token) throws Exception {
 		URI uri = buildWebSocketUri(token);
 		ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
 		LinkedBlockingQueue<String> messages = new LinkedBlockingQueue<>();
@@ -178,12 +222,21 @@ class RoomJoinControllerTest {
 				.subscribe();
 
 		assertThat(firstMessageReceived.await(3, TimeUnit.SECONDS)).isTrue();
-		assertThat(messages.poll(1, TimeUnit.SECONDS)).isNotBlank();
+		assertThat(messages.peek()).isNotBlank();
 		assertThat(error.get()).isNull();
 		return new ActiveWsConnection(release, disposable, finished, error, messages);
 	}
 
 	private JsonNode awaitMessageOfType(ActiveWsConnection connection, MessageType expectedType, Duration timeout) throws Exception {
+		return awaitMessageOfType(connection, expectedType, timeout, new ArrayList<>());
+	}
+
+	private JsonNode awaitMessageOfType(
+			ActiveWsConnection connection,
+			MessageType expectedType,
+			Duration timeout,
+			List<MessageType> seenTypes
+	) throws Exception {
 		long deadline = System.nanoTime() + timeout.toNanos();
 		while (System.nanoTime() < deadline) {
 			long remainingMillis = Math.max(1L, (deadline - System.nanoTime()) / 1_000_000L);
@@ -192,7 +245,9 @@ class RoomJoinControllerTest {
 				continue;
 			}
 			JsonNode root = objectMapper.readTree(payload);
-			if (expectedType.name().equals(root.path("type").asText())) {
+			MessageType receivedType = MessageType.valueOf(root.path("type").asText());
+			seenTypes.add(receivedType);
+			if (expectedType == receivedType) {
 				return root;
 			}
 		}
@@ -271,4 +326,3 @@ class RoomJoinControllerTest {
 		}
 	}
 }
-

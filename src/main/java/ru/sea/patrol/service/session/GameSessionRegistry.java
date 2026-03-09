@@ -8,6 +8,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.RoomCatalogWsService;
@@ -23,18 +24,21 @@ public class GameSessionRegistry {
 	private final ScheduledExecutorService scheduler;
 	private final RoomRegistry roomRegistry;
 	private final RoomCatalogWsService roomCatalogWsService;
+	private final ApplicationEventPublisher eventPublisher;
 	private final Map<String, ActiveSessionEntry> activeSessions = new ConcurrentHashMap<>();
 	private final Map<String, GraceSessionEntry> reconnectGraceSessions = new ConcurrentHashMap<>();
 
 	public GameSessionRegistry(
 			GameRoomProperties roomProperties,
 			RoomRegistry roomRegistry,
-			RoomCatalogWsService roomCatalogWsService
+			RoomCatalogWsService roomCatalogWsService,
+			ApplicationEventPublisher eventPublisher
 	) {
 		this.reconnectGracePeriodMillis = roomProperties.reconnectGracePeriod().toMillis();
 		this.scheduler = Executors.newSingleThreadScheduledExecutor(sessionThreadFactory());
 		this.roomRegistry = roomRegistry;
 		this.roomCatalogWsService = roomCatalogWsService;
+		this.eventPublisher = eventPublisher;
 	}
 
 	public synchronized boolean isLoginAllowed(String username) {
@@ -44,6 +48,7 @@ public class GameSessionRegistry {
 	public ClaimResult claimSession(String username, String sessionId) {
 		String retainedRoomId = null;
 		ClaimResult claimResult;
+		SessionBinding restoredBinding = SessionBinding.lobby();
 		synchronized (this) {
 			var activeEntry = activeSessions.get(username);
 			if (activeEntry != null) {
@@ -56,9 +61,10 @@ public class GameSessionRegistry {
 			if (graceEntry != null) {
 				cancel(graceEntry.expirationTask());
 				retainedRoomId = graceEntry.binding().roomId();
+				restoredBinding = graceEntry.binding();
 			}
 
-			activeSessions.put(username, ActiveSessionEntry.active(sessionId));
+			activeSessions.put(username, ActiveSessionEntry.active(sessionId, restoredBinding));
 			claimResult = graceEntry == null ? ClaimResult.NEW_SESSION : ClaimResult.RECONNECTED_SESSION;
 		}
 		cleanupRetainedRoomIfNeeded(retainedRoomId);
@@ -124,15 +130,19 @@ public class GameSessionRegistry {
 	}
 
 	private void expireGraceWindow(String username, String sessionId) {
-		String retainedRoomId = null;
+		SessionGraceExpiredEvent expirationEvent = null;
 		synchronized (this) {
 			var graceEntry = reconnectGraceSessions.get(username);
 			if (graceEntry != null && graceEntry.sessionId().equals(sessionId)) {
-				retainedRoomId = graceEntry.binding().roomId();
 				reconnectGraceSessions.remove(username);
+				if (graceEntry.binding().roomId() != null) {
+					expirationEvent = new SessionGraceExpiredEvent(username, graceEntry.binding().roomId());
+				}
 			}
 		}
-		cleanupRetainedRoomIfNeeded(retainedRoomId);
+		if (expirationEvent != null) {
+			eventPublisher.publishEvent(expirationEvent);
+		}
 	}
 
 	private void cleanupRetainedRoomIfNeeded(String roomId) {
@@ -184,6 +194,10 @@ public class GameSessionRegistry {
 	private record ActiveSessionEntry(String sessionId, SessionBinding binding) {
 		private static ActiveSessionEntry active(String sessionId) {
 			return new ActiveSessionEntry(sessionId, SessionBinding.lobby());
+		}
+
+		private static ActiveSessionEntry active(String sessionId, SessionBinding binding) {
+			return new ActiveSessionEntry(sessionId, binding == null ? SessionBinding.lobby() : binding);
 		}
 
 		private ActiveSessionEntry withBinding(SessionBinding newBinding) {

@@ -74,7 +74,7 @@ class RoomCatalogWsUpdatesTest {
 	}
 
 	@Test
-	void joinAndCleanup_lobbyClientReceivesRoomCatalogUpdates() throws Exception {
+	void joinAndGraceCleanup_lobbyClientReceivesRoomCatalogUpdates() throws Exception {
 		String roomPlayerToken = loginAndGetToken("user1", "123456");
 		String lobbyObserverToken = loginAndGetToken("user2", "123456");
 
@@ -118,17 +118,6 @@ class RoomCatalogWsUpdatesTest {
 				assertThat(findRoom(joinUpdatePayload, "sandbox-1").path("currentPlayers").asInt()).isEqualTo(1);
 
 				roomPlayerConnection.close();
-
-				JsonNode leaveUpdatePayload = awaitCatalogMessage(
-						lobbyObserverConnection,
-						MessageType.ROOMS_UPDATED,
-						catalog -> {
-							JsonNode room = findRoom(catalog, "sandbox-1");
-							return room != null && room.path("currentPlayers").asInt() == 0;
-						},
-						Duration.ofSeconds(3)
-				);
-				assertThat(findRoom(leaveUpdatePayload, "sandbox-1").path("currentPlayers").asInt()).isZero();
 
 				JsonNode cleanupPayload = awaitCatalogMessage(
 						lobbyObserverConnection,
@@ -266,5 +255,3 @@ class RoomCatalogWsUpdatesTest {
 		}
 	}
 }
-
-

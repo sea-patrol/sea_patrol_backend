@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameRoomProperties;
@@ -73,12 +74,14 @@ class WsProtocolParsingTest {
 				5,
 				100,
 				Duration.ofMillis(100),
-				Duration.ofSeconds(30)
+				Duration.ofSeconds(15)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, roomProperties);
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
-		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, roomCatalogWsService);
+		ApplicationEventPublisher eventPublisher = event -> {
+		};
+		GameSessionRegistry sessionRegistry = new GameSessionRegistry(roomProperties, roomRegistry, roomCatalogWsService, eventPublisher);
 		return new GameWebSocketHandler(
 				new ChatService(objectMapper, sessionRegistry),
 				new GameService(objectMapper, roomProperties, roomRegistry, sessionRegistry, new SpawnService()),
@@ -103,3 +106,4 @@ class WsProtocolParsingTest {
 		}
 	}
 }
+
