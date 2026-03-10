@@ -28,13 +28,17 @@ public class Player {
 	private Disposable roomSubscription;
 
 	private final String name;
-	private final Sinks.Many<MessageOutput> sink;
+	private Sinks.Many<MessageOutput> sink;
 
 	private PlayerShipInstance ship;
 
 	public Player(String name) {
 		this.name = name;
-		this.sink = Sinks.many().unicast().onBackpressureBuffer();
+		this.sink = newSessionSink();
+	}
+
+	public void resetSessionSink() {
+		sink = newSessionSink();
 	}
 
 	public void reply(MessageOutput message) {
@@ -70,19 +74,39 @@ public class Player {
 		}
 	}
 
+	public void deactivateRoomSubscription() {
+		if (roomSubscription != null) {
+			roomSubscription.dispose();
+			roomSubscription = null;
+		}
+	}
+
+	public void prepareForDisconnectGrace() {
+		deactivateRoomSubscription();
+		if (ship != null) {
+			setX(ship.getFrontendX());
+			setZ(ship.getFrontendZ());
+			setAngle(ship.getOrientation());
+			ship.freeze();
+			setVelocity(0f);
+		}
+	}
+
 	public void createShipInstanceInGameWorld(World world) {
 		this.ship = new PlayerShipInstance(world, this);
 	}
 
 	public void leaveRoom() {
 		this.room = null;
-		if (this.roomSubscription != null) {
-			this.roomSubscription.dispose();
-			this.roomSubscription = null;
-		}
+		deactivateRoomSubscription();
 		if (this.ship != null) {
 			this.ship.dispose();
 			this.ship = null;
 		}
 	}
+
+	private static Sinks.Many<MessageOutput> newSessionSink() {
+		return Sinks.many().replay().limit(16);
+	}
 }
+

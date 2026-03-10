@@ -14,4 +14,5 @@ game:
     update-period: 100ms
     max-rooms: 5
     max-players-per-room: 100
-    reconnect-grace-period: 30s
+    reconnect-grace-period: 15s
+    empty-room-idle-timeout: 30s

@@ -1,24 +1,50 @@
 package ru.sea.patrol.service.game;
 
+import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RoomRegistry {
 
 	private final GameRoomProperties roomProperties;
+	private final ApplicationEventPublisher eventPublisher;
+	private final long emptyRoomIdleTimeoutMillis;
+	private final ScheduledExecutorService scheduler;
 	private final Map<String, RoomRegistryEntry> rooms = new ConcurrentHashMap<>();
+	private final Map<String, ScheduledFuture<?>> emptyRoomCleanupTasks = new ConcurrentHashMap<>();
+
+	@Autowired
+	public RoomRegistry(GameRoomProperties roomProperties, ApplicationEventPublisher eventPublisher) {
+		this.roomProperties = roomProperties;
+		this.eventPublisher = eventPublisher;
+		this.emptyRoomIdleTimeoutMillis = roomProperties.emptyRoomIdleTimeout().toMillis();
+		this.scheduler = Executors.newSingleThreadScheduledExecutor(roomRegistryThreadFactory());
+	}
 
 	public RoomRegistry(GameRoomProperties roomProperties) {
-		this.roomProperties = roomProperties;
+		this(roomProperties, event -> {
+		});
 	}
 
 	public synchronized GameRoom getOrCreateRoom(String roomId) {
-		return rooms.computeIfAbsent(roomId, this::createDefaultEntry)
-				.room();
+		RoomRegistryEntry entry = rooms.computeIfAbsent(roomId, this::createDefaultEntry);
+		if (entry.room().isEmpty()) {
+			scheduleEmptyRoomCleanupIfNeeded(roomId);
+		} else {
+			cancelEmptyRoomCleanup(roomId);
+		}
+		return entry.room();
 	}
 
 	public synchronized RoomRegistryEntry createRoom(String requestedName, String mapId, String mapName) {
@@ -34,6 +60,7 @@ public class RoomRegistry {
 				new GameRoom(roomId, roomProperties.updatePeriod().toMillis())
 		);
 		rooms.put(roomId, entry);
+		scheduleEmptyRoomCleanupIfNeeded(roomId);
 		return entry;
 	}
 
@@ -46,12 +73,41 @@ public class RoomRegistry {
 		return rooms.get(roomId);
 	}
 
+	public synchronized void scheduleEmptyRoomCleanupIfNeeded(String roomId) {
+		var entry = rooms.get(roomId);
+		if (entry == null) {
+			cancelEmptyRoomCleanup(roomId);
+			return;
+		}
+		if (!entry.room().isEmpty()) {
+			cancelEmptyRoomCleanup(roomId);
+			return;
+		}
+		if (emptyRoomCleanupTasks.containsKey(roomId)) {
+			return;
+		}
+		ScheduledFuture<?> cleanupTask = scheduler.schedule(
+				() -> expireEmptyRoom(roomId),
+				emptyRoomIdleTimeoutMillis,
+				TimeUnit.MILLISECONDS
+		);
+		emptyRoomCleanupTasks.put(roomId, cleanupTask);
+	}
+
+	public synchronized void cancelEmptyRoomCleanup(String roomId) {
+		ScheduledFuture<?> cleanupTask = emptyRoomCleanupTasks.remove(roomId);
+		if (cleanupTask != null) {
+			cleanupTask.cancel(false);
+		}
+	}
+
 	public synchronized boolean removeRoomIfEmpty(String roomId) {
 		var entry = rooms.get(roomId);
 		if (entry == null || !entry.room().isEmpty()) {
 			return false;
 		}
 
+		cancelEmptyRoomCleanup(roomId);
 		rooms.remove(roomId);
 		entry.room().stop();
 		return true;
@@ -67,6 +123,30 @@ public class RoomRegistry {
 
 	public synchronized List<RoomRegistryEntry> roomsSnapshot() {
 		return List.copyOf(new ArrayList<>(rooms.values()));
+	}
+
+	@PreDestroy
+	public void shutdown() {
+		emptyRoomCleanupTasks.values().forEach(task -> task.cancel(false));
+		emptyRoomCleanupTasks.clear();
+		scheduler.shutdownNow();
+	}
+
+	private void expireEmptyRoom(String roomId) {
+		boolean removed = false;
+		synchronized (this) {
+			emptyRoomCleanupTasks.remove(roomId);
+			var entry = rooms.get(roomId);
+			if (entry == null || !entry.room().isEmpty()) {
+				return;
+			}
+			rooms.remove(roomId);
+			entry.room().stop();
+			removed = true;
+		}
+		if (removed) {
+			eventPublisher.publishEvent(new EmptyRoomExpiredEvent(roomId));
+		}
 	}
 
 	private RoomRegistryEntry createDefaultEntry(String roomId) {
@@ -120,5 +200,13 @@ public class RoomRegistry {
 				.replaceAll("[^a-z0-9]+", "-")
 				.replaceAll("^-+|-+$", "");
 		return slug.isBlank() ? "sandbox" : slug;
+	}
+
+	private static ThreadFactory roomRegistryThreadFactory() {
+		return runnable -> {
+			Thread thread = new Thread(runnable, "sea-patrol-room-registry");
+			thread.setDaemon(true);
+			return thread;
+		};
 	}
 }

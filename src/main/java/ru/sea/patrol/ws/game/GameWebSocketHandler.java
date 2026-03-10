@@ -44,6 +44,9 @@ public class GameWebSocketHandler implements WebSocketHandler {
 						log.warn("Rejected duplicate WebSocket session for user {}", username);
 						return session.close(CloseStatus.POLICY_VIOLATION.withReason(GameSessionRegistry.DUPLICATE_SESSION_ERROR_CODE));
 					}
+					String resumedRoomId = claimResult == GameSessionRegistry.ClaimResult.RECONNECTED_SESSION
+							? sessionRegistry.activeRoomId(username)
+							: null;
 
 					Flux<WebSocketMessage> chatFlux = chatService.initialize(username)
 							.map(message -> createWebSocketMessage(message, session));
@@ -57,6 +60,11 @@ public class GameWebSocketHandler implements WebSocketHandler {
 									.filter(__ -> sessionRegistry.hasActiveLobbySession(username))
 					).map(message -> createWebSocketMessage(message, session));
 					Flux<WebSocketMessage> outbound = Flux.merge(chatFlux, gameFlux, roomCatalogFlux);
+
+					if (resumedRoomId != null && !resumedRoomId.isBlank()) {
+						chatService.moveUserToRoom(username, resumedRoomId);
+						gameService.resumeRoomSession(username, resumedRoomId);
+					}
 
 					Flux<MessageInput> inbound = session.receive()
 							.map(WebSocketMessage::getPayloadAsText)
@@ -94,7 +102,7 @@ public class GameWebSocketHandler implements WebSocketHandler {
 			return;
 		}
 		chatService.cleanupUser(username);
-		boolean roomCatalogChanged = gameService.cleanupPlayer(username);
+		boolean roomCatalogChanged = gameService.disconnectPlayer(username);
 		if (roomCatalogChanged) {
 			roomCatalogWsService.publishRoomsUpdated();
 		}
@@ -138,4 +146,3 @@ public class GameWebSocketHandler implements WebSocketHandler {
 		}
 	}
 }
-

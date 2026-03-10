@@ -11,7 +11,8 @@ public record GameRoomProperties(
 		Integer maxRooms,
 		Integer maxPlayersPerRoom,
 		Duration updatePeriod,
-		Duration reconnectGracePeriod
+		Duration reconnectGracePeriod,
+		Duration emptyRoomIdleTimeout
 ) {
 
 	public GameRoomProperties {
@@ -29,6 +30,9 @@ public record GameRoomProperties(
 		}
 		if (reconnectGracePeriod == null || reconnectGracePeriod.isZero() || reconnectGracePeriod.isNegative()) {
 			throw new IllegalArgumentException("game.room.reconnect-grace-period must be greater than zero");
+		}
+		if (emptyRoomIdleTimeout == null || emptyRoomIdleTimeout.isZero() || emptyRoomIdleTimeout.isNegative()) {
+			throw new IllegalArgumentException("game.room.empty-room-idle-timeout must be greater than zero");
 		}
 	}
 }

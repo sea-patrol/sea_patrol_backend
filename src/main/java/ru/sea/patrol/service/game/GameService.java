@@ -2,7 +2,6 @@ package ru.sea.patrol.service.game;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +13,9 @@ import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
+import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
+import ru.sea.patrol.ws.protocol.dto.SpawnAssignedResponseDto;
+import ru.sea.patrol.ws.protocol.dto.SpawnReason;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -26,12 +28,13 @@ public class GameService {
 	private final GameRoomProperties roomProperties;
 	private final RoomRegistry roomRegistry;
 	private final GameSessionRegistry sessionRegistry;
-	private final Random random = new Random();
+	private final SpawnService spawnService;
 
 	private final Map<String, Player> players = new ConcurrentHashMap<>();
 
 	public Flux<MessageOutput> initialize(String playerName) {
 		var player = retrievePlayer(playerName);
+		player.resetSessionSink();
 		return player.getSink().asFlux();
 	}
 
@@ -60,6 +63,10 @@ public class GameService {
 		return roomProperties.reconnectGracePeriod();
 	}
 
+	public Duration getEmptyRoomIdleTimeout() {
+		return roomProperties.emptyRoomIdleTimeout();
+	}
+
 	public long getRoomUpdatePeriodMillis() {
 		return roomProperties.updatePeriod().toMillis();
 	}
@@ -70,6 +77,22 @@ public class GameService {
 			throw new IllegalArgumentException("Room not found: " + roomId);
 		}
 		room.join(retrievePlayer(playerName), false);
+		roomRegistry.cancelEmptyRoomCleanup(roomId);
+	}
+
+	public SpawnAssignedResponseDto emitInitialSpawnAssigned(String playerName, String roomId) {
+		return emitSpawnAssigned(playerName, roomId, SpawnReason.INITIAL);
+	}
+
+	public SpawnAssignedResponseDto respawnPlayer(String playerName) {
+		Player player = requireExistingPlayer(playerName);
+		GameRoom room = player.getRoom();
+		if (room == null) {
+			throw new IllegalStateException("Player is not in an active room: " + playerName);
+		}
+		player.setHealth(player.getMaxHealth());
+		player.setVelocity(0f);
+		return emitSpawnAssigned(playerName, room.getName(), SpawnReason.RESPAWN);
 	}
 
 	public void activateRoomJoin(String playerName, String roomId) {
@@ -86,6 +109,26 @@ public class GameService {
 		room.start();
 	}
 
+	public void resumeRoomSession(String playerName, String roomId) {
+		var roomEntry = roomRegistry.findEntry(roomId);
+		var player = players.get(playerName);
+		if (roomEntry == null || player == null || player.getRoom() == null || !roomId.equals(player.getRoom().getName())) {
+			log.warn("Unable to resume room session for player {} in room {}", playerName, roomId);
+			return;
+		}
+
+		RoomJoinResponseDto response = new RoomJoinResponseDto(
+				roomEntry.id(),
+				roomEntry.mapId(),
+				roomEntry.mapName(),
+				roomEntry.room().getPlayerCount(),
+				roomProperties.maxPlayersPerRoom(),
+				"JOINED"
+		);
+		replyToPlayer(playerName, new MessageOutput(MessageType.ROOM_JOINED, response));
+		roomEntry.room().resumePlayer(player);
+	}
+
 	public void replyToPlayer(String playerName, MessageOutput message) {
 		var player = retrievePlayer(playerName);
 		player.reply(message);
@@ -98,8 +141,10 @@ public class GameService {
 		}
 		int beforeCount = room.getPlayerCount();
 		room.leave(playerName);
-		if (!sessionRegistry.hasReconnectGraceInRoom(roomName)) {
-			roomRegistry.removeRoomIfEmpty(roomName);
+		if (sessionRegistry.hasReconnectGraceInRoom(roomName)) {
+			roomRegistry.cancelEmptyRoomCleanup(roomName);
+		} else {
+			roomRegistry.scheduleEmptyRoomCleanupIfNeeded(roomName);
 		}
 		return room.getPlayerCount() != beforeCount || !roomRegistry.hasRoom(roomName);
 	}
@@ -111,6 +156,42 @@ public class GameService {
 			return leaveRoom(playerName, player.getRoom().getName());
 		}
 		return false;
+	}
+
+	public boolean disconnectPlayer(String playerName) {
+		var player = players.get(playerName);
+		if (player == null) {
+			return false;
+		}
+		if (player.getRoom() != null) {
+			player.prepareForDisconnectGrace();
+			return false;
+		}
+		players.remove(playerName);
+		return false;
+	}
+
+	private SpawnAssignedResponseDto emitSpawnAssigned(String playerName, String roomId, SpawnReason reason) {
+		SpawnAssignedResponseDto spawnAssignment = assignSpawn(playerName, roomId, reason);
+		replyToPlayer(playerName, new MessageOutput(MessageType.SPAWN_ASSIGNED, spawnAssignment));
+		return spawnAssignment;
+	}
+
+	private SpawnAssignedResponseDto assignSpawn(String playerName, String roomId, SpawnReason reason) {
+		Player player = requireExistingPlayer(playerName);
+		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn();
+		applySpawn(player, spawnPoint);
+		return new SpawnAssignedResponseDto(roomId, reason, spawnPoint.x(), spawnPoint.z(), spawnPoint.angle());
+	}
+
+	private void applySpawn(Player player, SpawnPoint spawnPoint) {
+		player.setX((float) spawnPoint.x())
+				.setZ((float) spawnPoint.z())
+				.setAngle((float) spawnPoint.angle())
+				.setVelocity(0f);
+		if (player.getShip() != null) {
+			player.getShip().setFrontendTransform((float) spawnPoint.x(), (float) spawnPoint.z(), (float) spawnPoint.angle());
+		}
 	}
 
 	private Mono<Void> handlePlayerInput(String username, JsonNode payload) {
@@ -125,6 +206,14 @@ public class GameService {
 		} catch (Exception e) {
 			return Mono.error(e);
 		}
+	}
+
+	private Player requireExistingPlayer(String playerName) {
+		Player player = players.get(playerName);
+		if (player == null) {
+			throw new IllegalStateException("Player is not initialized: " + playerName);
+		}
+		return player;
 	}
 
 	private Player retrievePlayer(String playerName) {

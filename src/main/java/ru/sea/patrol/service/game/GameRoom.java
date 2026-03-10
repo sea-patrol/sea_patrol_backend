@@ -83,6 +83,18 @@ public class GameRoom {
 		player.activateRoomSubscription();
 	}
 
+	public synchronized void resumePlayer(Player player) {
+		if (player == null || !players.containsKey(player.getName())) {
+			return;
+		}
+		player.activateRoomSubscription();
+		if (started) {
+			sendStartMessage(player);
+			return;
+		}
+		start();
+	}
+
 	public synchronized void leave(String playerName) {
 		log.info("Player {} leaving room {}", playerName, name);
 		var player = players.remove(playerName);

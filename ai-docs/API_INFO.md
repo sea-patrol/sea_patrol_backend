@@ -114,7 +114,7 @@ Response `200 OK`:
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
 - до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`;
-- пустая комната удаляется из registry, когда в ней больше нет активных игроков и не осталось игроков в reconnect grace для этого `roomId`.
+- пустая комната удаляется из registry не сразу: сначала в ней не должно остаться активных игроков и room-bound reconnect grace, после чего backend ждёт отдельный `game.room.empty-room-idle-timeout` (MVP default: `30s`).
 
 ### 3.6 `POST /api/v1/rooms`
 Создаёт новую комнату для lobby flow.
@@ -145,7 +145,8 @@ Response `201 Created`:
 - если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
 - пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
 - если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
-- после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам.
+- после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам;
+- если в созданную комнату никто не зайдёт, она автоматически исчезнет из catalog после `game.room.empty-room-idle-timeout`.
 
 Ошибки:
 - `400` -> `{ "errors": [{ "code": "INVALID_MAP_ID", "message": "Unknown mapId" }] }`
@@ -180,7 +181,8 @@ Response `200 OK`:
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
 - после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
-- текущий `SPAWN_ASSIGNED` использует временный authoritative placeholder spawn `(x=0.0, z=0.0, angle=0.0)` до отдельных задач по spawn logic.
+- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`;
+- backend также держит отдельный respawn emission path с тем же payload shape и `reason=RESPAWN` для active room player.
 
 Ошибки:
 - `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
@@ -192,14 +194,15 @@ Response `200 OK`:
 ### Session policy
 - Backend допускает только одну активную игровую WebSocket-сессию на `username`.
 - Повторное параллельное подключение с тем же пользователем отклоняется закрытием `POLICY_VIOLATION` с reason, содержащим `SEAPATROL_DUPLICATE_SESSION`.
-- После disconnect active session ownership снимается сразу, а username переводится в reconnect grace на `game.room.reconnect-grace-period`; в этот интервал новый login и новое WS-подключение разрешаются.
-- Если disconnect произошёл из игровой комнаты, пустая комната сохраняется в registry на время reconnect grace и удаляется после истечения окна, если активные игроки так и не появились.
-- Reconnect в течение grace только повторно допускает пользователя в систему и возвращает его в `lobby`; полный resume room state не входит в текущий контракт и будет отдельной задачей.
+- После disconnect active session ownership снимается сразу, а username переводится в reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`); в этот интервал новый login и новое WS-подключение разрешаются.
+- Если disconnect произошёл из игровой комнаты, backend удерживает room binding и player runtime state до истечения grace; lobby room catalog не уменьшает `currentPlayers` мгновенно и обновляется после final cleanup retained player, а затем отдельным событием после room idle-timeout.
+- Reconnect в течение grace восстанавливает ту же room binding без повторного `POST /api/v1/rooms/{roomId}/join`: backend повторно шлёт `ROOM_JOINED`, затем `INIT_GAME_STATE`, не эмитит новый `SPAWN_ASSIGNED` и возвращает игрока в ту же комнату.
+- Если grace истёк, backend удаляет retained player из room runtime state; если после этого комната стала пустой, она остаётся в catalog с `currentPlayers = 0` до `game.room.empty-room-idle-timeout`, а следующий WS handshake стартует как новая `lobby` session.
 - После успешного WS handshake backend создаёт активную `lobby` session для пользователя и автоматически добавляет его в chat group `group:lobby`.
 - Public chat scope для `lobby` / `room` управляется только сервером по session binding; клиентские `CHAT_JOIN` / `CHAT_LEAVE` не могут подписать пользователя на чужую room group.
 - При lobby WebSocket-подключении backend автоматически отправляет `ROOMS_SNAPSHOT` с текущим room catalog.
 - До явного REST `POST /api/v1/rooms/{roomId}/join` пользователь не привязан к игровой комнате и не получает room stream.
-- Все live-изменения каталога (`create`, `join`, `leave`, cleanup`) публикуются как `ROOMS_UPDATED` полным snapshot payload без delta-патчей.
+- Все live-изменения каталога (`create`, `join`, `leave`, cleanup`) публикуются как `ROOMS_UPDATED` полным snapshot payload без delta-патчей; empty-room cleanup может приходить в два шага: сначала room остаётся с `currentPlayers = 0`, потом исчезает после idle-timeout.
 
 ### Входящие сообщения от клиента
 Сервер ожидает массив:
@@ -332,6 +335,7 @@ Payload совпадает с `GET /api/v1/rooms`:
 
 Примечания:
 - публикуется для active lobby WebSocket-клиентов после `create`, `join`, `leave`, cleanup;
+- при final leave/grace expiry room catalog может сначала показать комнату с `currentPlayers = 0`, а затем отдельным `ROOMS_UPDATED` удалить её после idle-timeout.
 - payload всегда является полным snapshot, а не delta-патчем.
 
 ### `ROOM_JOINED`
@@ -366,16 +370,18 @@ Payload:
 {
   "roomId": "sandbox-1",
   "reason": "INITIAL",
-  "x": 0.0,
-  "z": 0.0,
+  "x": 12.5,
+  "z": -8.0,
   "angle": 0.0
 }
 ```
 
 Примечания:
 - spawn/respawn остаётся server-authoritative;
-- для текущего backend runtime initial join отправляет placeholder coordinates `(0.0, 0.0, 0.0)`;
-- отдельная spawn logic и non-placeholder assignment остаются следующими backend задачами.
+- initial spawn для current runtime вычисляется backend'ом как random offset вокруг `(0, 0)`;
+- MVP bounds для initial spawn сейчас зафиксированы как `x/z in [-30.0, 30.0]`;
+- `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`;
+- текущий runtime уже эмитит `INITIAL` в room join flow и умеет эмитить `RESPAWN` через отдельный backend respawn path; death/combat trigger остаётся задачей следующих wave'ов.
 
 ### `PLAYER_JOIN`
 Payload (`PlayerInfo`):
@@ -385,8 +391,8 @@ Payload (`PlayerInfo`):
   "health": 500,
   "maxHealth": 500,
   "velocity": 0.0,
-  "x": 0.0,
-  "z": 0.0,
+  "x": 12.5,
+  "z": -8.0,
   "angle": 0.0,
   "model": "model",
   "height": 4.0,
@@ -410,8 +416,8 @@ Payload:
       "health": 500,
       "maxHealth": 500,
       "velocity": 0.0,
-      "x": 0.0,
-      "z": 0.0,
+      "x": 12.5,
+      "z": -8.0,
       "angle": 0.0,
       "model": "model",
       "height": 4.0,
@@ -433,8 +439,8 @@ Payload:
       "name": "user1",
       "health": 500,
       "velocity": 0.0,
-      "x": 0.0,
-      "z": 0.0,
+      "x": 12.5,
+      "z": -8.0,
       "angle": 0.0
     }
   ]
@@ -472,6 +478,11 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
+
+
+
 
 
 

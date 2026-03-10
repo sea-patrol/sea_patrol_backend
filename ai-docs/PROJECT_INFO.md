@@ -42,7 +42,7 @@
 ### 4.1 HTTP / REST
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
-- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются после того, как в них не остаётся активных игроков и завершается room-bound reconnect grace.
+- `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются не мгновенно, а после отдельного `game.room.empty-room-idle-timeout`, когда в них уже нет активных игроков и не осталось room-bound reconnect grace.
 - `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation, после чего lobby WS-клиенты получают `ROOMS_UPDATED`.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
@@ -68,13 +68,15 @@
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
-- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` хранит только временную metadata для room retention/reconnect policy.
-- Если пользователь отключился из комнаты и после этого комната стала пустой, backend удерживает её в `RoomRegistry` до окончания reconnect grace; при disconnect lobby WS-клиенты получают `ROOMS_UPDATED` с уменьшенным `currentPlayers`, а после истечения окна — ещё один `ROOMS_UPDATED`, если комната была удалена автоматически.
-- Reconnect в течение grace пока влияет только на admission policy и возвращает пользователя в `lobby`, но не восстанавливает room binding/state автоматически. Полный room resume остается задачей `TASK-021`.
+- После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`) удерживает room-bound runtime state для controlled resume.
+- Если пользователь отключился из комнаты и после этого она осталась без других активных игроков, backend удерживает её в `RoomRegistry` до окончания reconnect grace; `currentPlayers` в lobby catalog не уменьшается мгновенно, потому что disconnected player остаётся частью retained room state до timeout.
+- Reconnect в течение grace восстанавливает ту же room binding и текущего игрока в той же комнате: backend повторно шлёт `ROOM_JOINED` и `INIT_GAME_STATE`, но не делает новый spawn.
+- Если grace истёк, backend выполняет final cleanup retained player/runtime state; после этого пустая комната остаётся в catalog с `currentPlayers = 0` ещё на отдельный `game.room.empty-room-idle-timeout`, а затем удаляется автоматически.
 - Подготовительные room limits и reconnect defaults уже вынесены в `game.room.*`:
   - `max-rooms`;
   - `max-players-per-room`;
-  - `reconnect-grace-period`.
+  - `reconnect-grace-period`;
+  - `empty-room-idle-timeout`.
 
 ## 5. Доменные ограничения (текущее состояние)
 - Пользователи и игровые сущности хранятся в памяти процесса.
@@ -84,9 +86,9 @@
 - `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
 - Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
-- Текущий `SPAWN_ASSIGNED` для initial join использует placeholder coordinates `(0.0, 0.0, 0.0)`; полноценная spawn logic остаётся отдельной задачей.
+- Initial spawn для room join уже вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется по MVP bounds `x/z in [-30.0, 30.0]`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
-- Reconnect grace уже участвует в empty-room cleanup policy и в повторном admission flow, но не держит пользователя в состоянии active session и не покрывает полный resume room state.
+- Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.
 
 ## 6. Сборка и запуск
 - Для запуска требуется JWT secret (одна из переменных окружения):
@@ -113,8 +115,12 @@
 - JWT secret не хранится в репозитории: задается через env `JWT_SECRET` (raw) или `JWT_SECRET_BASE64` (base64/base64url). Без секрета приложение не стартует.
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
-- Reconnect после disconnect сейчас решает только повторный admission той же учетной записи и временно удерживает пустую комнату на время grace; восстановление room membership/state еще не реализовано.
+- Empty-room cleanup теперь предсказуем и bounded по `game.room.empty-room-idle-timeout`, но у комнат всё ещё нет owner/host policy или явного manual close flow.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
+
+
+
+
 
 
 

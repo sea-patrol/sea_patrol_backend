@@ -29,7 +29,10 @@ import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = "game.room.reconnect-grace-period=120ms"
+		properties = {
+				"game.room.reconnect-grace-period=120ms",
+				"game.room.empty-room-idle-timeout=120ms"
+		}
 )
 @AutoConfigureWebTestClient
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
@@ -74,7 +77,7 @@ class RoomCatalogWsUpdatesTest {
 	}
 
 	@Test
-	void joinAndCleanup_lobbyClientReceivesRoomCatalogUpdates() throws Exception {
+	void joinAndGraceCleanup_lobbyClientReceivesRoomCatalogUpdates() throws Exception {
 		String roomPlayerToken = loginAndGetToken("user1", "123456");
 		String lobbyObserverToken = loginAndGetToken("user2", "123456");
 
@@ -119,7 +122,7 @@ class RoomCatalogWsUpdatesTest {
 
 				roomPlayerConnection.close();
 
-				JsonNode leaveUpdatePayload = awaitCatalogMessage(
+				JsonNode emptyRoomPayload = awaitCatalogMessage(
 						lobbyObserverConnection,
 						MessageType.ROOMS_UPDATED,
 						catalog -> {
@@ -128,7 +131,7 @@ class RoomCatalogWsUpdatesTest {
 						},
 						Duration.ofSeconds(3)
 				);
-				assertThat(findRoom(leaveUpdatePayload, "sandbox-1").path("currentPlayers").asInt()).isZero();
+				assertThat(findRoom(emptyRoomPayload, "sandbox-1").path("currentPlayers").asInt()).isZero();
 
 				JsonNode cleanupPayload = awaitCatalogMessage(
 						lobbyObserverConnection,
@@ -266,5 +269,3 @@ class RoomCatalogWsUpdatesTest {
 		}
 	}
 }
-
-
