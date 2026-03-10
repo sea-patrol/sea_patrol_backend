@@ -13,28 +13,48 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import ru.sea.patrol.service.game.map.MapTemplate;
+import ru.sea.patrol.service.game.map.MapTemplateRegistry;
 
 @Service
 public class RoomRegistry {
 
 	private final GameRoomProperties roomProperties;
 	private final ApplicationEventPublisher eventPublisher;
+	private final MapTemplate defaultMapTemplate;
 	private final long emptyRoomIdleTimeoutMillis;
 	private final ScheduledExecutorService scheduler;
 	private final Map<String, RoomRegistryEntry> rooms = new ConcurrentHashMap<>();
 	private final Map<String, ScheduledFuture<?>> emptyRoomCleanupTasks = new ConcurrentHashMap<>();
 
 	@Autowired
+	public RoomRegistry(
+			GameRoomProperties roomProperties,
+			ApplicationEventPublisher eventPublisher,
+			MapTemplateRegistry mapTemplateRegistry
+	) {
+		this(roomProperties, eventPublisher, mapTemplateRegistry.defaultMap());
+	}
+
 	public RoomRegistry(GameRoomProperties roomProperties, ApplicationEventPublisher eventPublisher) {
-		this.roomProperties = roomProperties;
-		this.eventPublisher = eventPublisher;
-		this.emptyRoomIdleTimeoutMillis = roomProperties.emptyRoomIdleTimeout().toMillis();
-		this.scheduler = Executors.newSingleThreadScheduledExecutor(roomRegistryThreadFactory());
+		this(roomProperties, eventPublisher, MapTemplate.mvpDefault());
 	}
 
 	public RoomRegistry(GameRoomProperties roomProperties) {
 		this(roomProperties, event -> {
-		});
+		}, MapTemplate.mvpDefault());
+	}
+
+	private RoomRegistry(
+			GameRoomProperties roomProperties,
+			ApplicationEventPublisher eventPublisher,
+			MapTemplate defaultMapTemplate
+	) {
+		this.roomProperties = roomProperties;
+		this.eventPublisher = eventPublisher;
+		this.defaultMapTemplate = defaultMapTemplate;
+		this.emptyRoomIdleTimeoutMillis = roomProperties.emptyRoomIdleTimeout().toMillis();
+		this.scheduler = Executors.newSingleThreadScheduledExecutor(roomRegistryThreadFactory());
 	}
 
 	public synchronized GameRoom getOrCreateRoom(String roomId) {
@@ -153,8 +173,8 @@ public class RoomRegistry {
 		return new RoomRegistryEntry(
 				roomId,
 				roomId,
-				RoomCatalogService.DEFAULT_MAP_ID,
-				RoomCatalogService.DEFAULT_MAP_NAME,
+				defaultMapTemplate.id(),
+				defaultMapTemplate.name(),
 				new GameRoom(roomId, roomProperties.updatePeriod().toMillis())
 		);
 	}

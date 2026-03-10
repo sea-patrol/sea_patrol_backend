@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import ru.sea.patrol.service.chat.ChatService;
 import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.GameService;
@@ -15,6 +16,7 @@ import ru.sea.patrol.service.game.RoomCatalogService;
 import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 import ru.sea.patrol.service.game.SpawnService;
+import ru.sea.patrol.service.game.map.MapTemplateRegistry;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.game.GameWebSocketHandler;
 import ru.sea.patrol.ws.protocol.MessageType;
@@ -28,7 +30,7 @@ class WsProtocolParsingTest {
 		GameWebSocketHandler handler = newHandler();
 
 		MessageInput input = invokeParseMessage(handler, """
-				["PLAYER_INPUT", {"left": false, "right": true, "up": true, "down": false}]
+				[\"PLAYER_INPUT\", {\"left\": false, \"right\": true, \"up\": true, \"down\": false}]
 				""");
 
 		assertThat(input.getType()).isEqualTo(MessageType.PLAYER_INPUT);
@@ -42,7 +44,7 @@ class WsProtocolParsingTest {
 		GameWebSocketHandler handler = newHandler();
 
 		MessageInput input = invokeParseMessage(handler, """
-				["CHAT_JOIN", "group:party-1"]
+				[\"CHAT_JOIN\", \"group:party-1\"]
 				""");
 
 		assertThat(input.getType()).isEqualTo(MessageType.CHAT_JOIN);
@@ -78,7 +80,7 @@ class WsProtocolParsingTest {
 				Duration.ofSeconds(30)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
-		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, roomProperties);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, roomProperties, newMapTemplateRegistry(objectMapper));
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		ApplicationEventPublisher eventPublisher = event -> {
 		};
@@ -89,6 +91,14 @@ class WsProtocolParsingTest {
 				roomCatalogWsService,
 				objectMapper,
 				sessionRegistry
+		);
+	}
+
+	private static MapTemplateRegistry newMapTemplateRegistry(ObjectMapper objectMapper) {
+		return new MapTemplateRegistry(
+				objectMapper,
+				new PathMatchingResourcePatternResolver(),
+				"classpath*:worlds/*/manifest.json"
 		);
 	}
 

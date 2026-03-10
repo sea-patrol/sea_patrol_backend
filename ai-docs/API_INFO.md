@@ -113,7 +113,8 @@ Response `200 OK`:
 - `rooms` может быть пустым массивом;
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
-- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`;
+- `mapId` и `mapName` теперь резолвятся через in-memory `MapTemplateRegistry`, который загружает manifest-файлы из `src/main/resources/worlds/*`;
+- в текущем production bundle зарегистрирована только карта `caribbean-01`, поэтому room catalog пока всё ещё возвращает `Caribbean Sea` для всех доступных комнат;
 - пустая комната удаляется из registry не сразу: сначала в ней не должно остаться активных игроков и room-bound reconnect grace, после чего backend ждёт отдельный `game.room.empty-room-idle-timeout` (MVP default: `30s`).
 
 ### 3.6 `POST /api/v1/rooms`
@@ -143,7 +144,7 @@ Response `201 Created`:
 Примечания:
 - если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
 - если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
-- пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
+- backend валидирует `mapId` против своего in-memory `MapTemplateRegistry`; в текущем production bundle зарегистрирована только `caribbean-01`, поэтому любое другое значение возвращает `INVALID_MAP_ID`;
 - если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
 - после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам;
 - если в созданную комнату никто не зайдёт, она автоматически исчезнет из catalog после `game.room.empty-room-idle-timeout`.
