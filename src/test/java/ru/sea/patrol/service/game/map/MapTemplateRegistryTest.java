@@ -12,7 +12,7 @@ class MapTemplateRegistryTest {
 	private final PathMatchingResourcePatternResolver resourcePatternResolver = new PathMatchingResourcePatternResolver();
 
 	@Test
-	void loadsFullCaribbeanPackageFromProductionResources() {
+	void loadsFullProductionMapPackages() {
 		MapTemplateRegistry registry = new MapTemplateRegistry(
 				objectMapper,
 				resourcePatternResolver,
@@ -22,7 +22,7 @@ class MapTemplateRegistryTest {
 		MapTemplate caribbean = registry.defaultMap();
 		assertThat(registry.list())
 				.extracting(MapTemplate::id)
-				.containsExactly("caribbean-01");
+				.containsExactly("caribbean-01", "test-sandbox-01");
 		assertThat(caribbean.id()).isEqualTo("caribbean-01");
 		assertThat(caribbean.name()).isEqualTo("Caribbean Sea");
 		assertThat(caribbean.region()).isEqualTo("caribbean");
@@ -35,6 +35,15 @@ class MapTemplateRegistryTest {
 		assertThat(caribbean.spawnPoints()).hasSize(1);
 		assertThat(caribbean.pointsOfInterest()).isNotEmpty();
 		assertThat(caribbean.minimap().calibration().worldMaxX()).isEqualTo(5000.0);
+
+		assertThat(registry.get("test-sandbox-01"))
+				.hasValueSatisfying(map -> {
+					assertThat(map.name()).isEqualTo("Test Sandbox");
+					assertThat(map.region()).isEqualTo("dev");
+					assertThat(map.defaultMap()).isFalse();
+					assertThat(map.defaultWind().speed()).isEqualTo(4.0);
+					assertThat(map.spawnPoints()).hasSize(1);
+				});
 	}
 
 	@Test

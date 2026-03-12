@@ -118,6 +118,32 @@ class RoomControllerTest {
 	}
 
 	@Test
+	void createRoom_withRegisteredDevMap_returnsCreatedResponse() {
+		String token = loginAndGetToken("user1", "123456");
+
+		webTestClient
+				.post()
+				.uri("/api/v1/rooms")
+				.headers(headers -> headers.setBearerAuth(token))
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue("""
+						{
+						  "name": "Debug Room",
+						  "mapId": "test-sandbox-01"
+						}
+						""")
+				.exchange()
+				.expectStatus().isCreated()
+				.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+				.expectBody()
+				.jsonPath("$.id").isEqualTo("debug-room")
+				.jsonPath("$.name").isEqualTo("Debug Room")
+				.jsonPath("$.mapId").isEqualTo("test-sandbox-01")
+				.jsonPath("$.mapName").isEqualTo("Test Sandbox")
+				.jsonPath("$.status").isEqualTo("OPEN");
+	}
+
+	@Test
 	void createRoom_invalidMapId_returns400() {
 		String token = loginAndGetToken("user1", "123456");
 

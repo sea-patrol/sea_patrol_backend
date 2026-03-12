@@ -114,7 +114,7 @@ Response `200 OK`:
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
 - `mapId` и `mapName` теперь резолвятся через in-memory `MapTemplateRegistry`, который валидирует полный map package из `src/main/resources/worlds/*`;
-- в текущем production bundle зарегистрирована первая рабочая карта `caribbean-01`, уже содержащая `bounds/colliders`, `spawn-points`, `poi`, `minimap` metadata и `defaultWind`;
+- в текущем production bundle зарегистрированы `caribbean-01` и `test-sandbox-01`; первая остаётся default-картой MVP, вторая доступна как dev/debug room template;
 - пустая комната удаляется из registry не сразу: сначала в ней не должно остаться активных игроков и room-bound reconnect grace, после чего backend ждёт отдельный `game.room.empty-room-idle-timeout` (MVP default: `30s`).
 
 ### 3.6 `POST /api/v1/rooms`
@@ -144,7 +144,8 @@ Response `201 Created`:
 Примечания:
 - если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
 - если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
-- backend валидирует `mapId` против своего in-memory `MapTemplateRegistry`; в текущем production bundle зарегистрирована только `caribbean-01`, поэтому любое другое значение возвращает `INVALID_MAP_ID`;
+- backend валидирует `mapId` против своего in-memory `MapTemplateRegistry`; сейчас доступны `caribbean-01` и `test-sandbox-01`, а остальные значения возвращают `INVALID_MAP_ID`;
+- `test-sandbox-01` предназначена для dev/debug комнат и уже содержит отдельные `spawn-points`, `poi` и `defaultWind` metadata.
 - если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
 - после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам;
 - если в созданную комнату никто не зайдёт, она автоматически исчезнет из catalog после `game.room.empty-room-idle-timeout`.
