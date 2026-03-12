@@ -445,12 +445,19 @@ Payload:
 }
 ```
 
+Семантика `wind`:
+- `angle` приходит в радианах в плоскости `XZ`;
+- `0` означает направление вдоль `+X`, `PI / 2` — вдоль `+Z`;
+- backend runtime строит направление ветра как `Vector2(cos(angle), sin(angle))`, поэтому frontend и тесты должны интерпретировать угол именно так;
+- `speed` — неотрицательная скалярная сила ветра;
+- `INIT_GAME_STATE.wind` — initial authoritative snapshot room wind.
+
 ### `UPDATE_GAME_STATE`
 Payload:
 ```json
 {
   "delta": 0.1,
-  "wind": {"angle": 0.0, "speed": 0.0},
+  "wind": {"angle": 0.0, "speed": 10.0},
   "players": [
     {
       "name": "user1",
@@ -463,6 +470,11 @@ Payload:
   ]
 }
 ```
+
+Семантика `UPDATE_GAME_STATE.wind`:
+- payload shape совпадает с `INIT_GAME_STATE.wind`;
+- это полный текущий authoritative snapshot ветра комнаты, а не delta-патч;
+- до `TASK-035` backend не обещает фиксированную clockwise policy изменения направления, поэтому клиент должен просто применять последнее значение без локальных предположений о вращении.
 
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
 
