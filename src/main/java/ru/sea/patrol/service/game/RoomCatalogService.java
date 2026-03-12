@@ -50,8 +50,7 @@ public class RoomCatalogService {
 		MapTemplate mapTemplate = resolveMapTemplate(request == null ? null : request.getMapId());
 		var createdRoom = roomRegistry.createRoom(
 				normalizeName(request == null ? null : request.getName()),
-				mapTemplate.id(),
-				mapTemplate.name()
+				mapTemplate
 		);
 		return toSummary(createdRoom);
 	}

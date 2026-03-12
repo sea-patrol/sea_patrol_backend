@@ -88,7 +88,8 @@
 - `MapTemplateRegistry` уже загружает полный map package из `src/main/resources/worlds/*`: `manifest`, `colliders`, `spawn-points`, `poi`, `minimap` metadata и `defaultWind` settings.
 - В текущем production bundle зарегистрированы две карты: default `caribbean-01` и dev/debug `test-sandbox-01`; внешний room REST/WS contract пока не меняется, но обе уже доступны через `mapId` validation в backend.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
-- Initial spawn для room join уже вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется по MVP bounds `x/z in [-30.0, 30.0]`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
+- `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
+- Initial spawn для room join вычисляется backend'ом из `spawnPoints` + `spawnRules.playerSpawnRadius` и валидируется по `MapTemplate.bounds`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.
 

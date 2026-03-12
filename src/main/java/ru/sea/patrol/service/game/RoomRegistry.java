@@ -21,6 +21,7 @@ public class RoomRegistry {
 
 	private final GameRoomProperties roomProperties;
 	private final ApplicationEventPublisher eventPublisher;
+	private final MapTemplateRegistry mapTemplateRegistry;
 	private final MapTemplate defaultMapTemplate;
 	private final long emptyRoomIdleTimeoutMillis;
 	private final ScheduledExecutorService scheduler;
@@ -33,25 +34,27 @@ public class RoomRegistry {
 			ApplicationEventPublisher eventPublisher,
 			MapTemplateRegistry mapTemplateRegistry
 	) {
-		this(roomProperties, eventPublisher, mapTemplateRegistry.defaultMap());
+		this(roomProperties, eventPublisher, mapTemplateRegistry, mapTemplateRegistry.defaultMap());
 	}
 
 	public RoomRegistry(GameRoomProperties roomProperties, ApplicationEventPublisher eventPublisher) {
-		this(roomProperties, eventPublisher, MapTemplate.mvpDefault());
+		this(roomProperties, eventPublisher, null, MapTemplate.mvpDefault());
 	}
 
 	public RoomRegistry(GameRoomProperties roomProperties) {
 		this(roomProperties, event -> {
-		}, MapTemplate.mvpDefault());
+		}, null, MapTemplate.mvpDefault());
 	}
 
 	private RoomRegistry(
 			GameRoomProperties roomProperties,
 			ApplicationEventPublisher eventPublisher,
+			MapTemplateRegistry mapTemplateRegistry,
 			MapTemplate defaultMapTemplate
 	) {
 		this.roomProperties = roomProperties;
 		this.eventPublisher = eventPublisher;
+		this.mapTemplateRegistry = mapTemplateRegistry;
 		this.defaultMapTemplate = defaultMapTemplate;
 		this.emptyRoomIdleTimeoutMillis = roomProperties.emptyRoomIdleTimeout().toMillis();
 		this.scheduler = Executors.newSingleThreadScheduledExecutor(roomRegistryThreadFactory());
@@ -67,7 +70,8 @@ public class RoomRegistry {
 		return entry.room();
 	}
 
-	public synchronized RoomRegistryEntry createRoom(String requestedName, String mapId, String mapName) {
+	public synchronized RoomRegistryEntry createRoom(String requestedName, MapTemplate mapTemplate) {
+		MapTemplate resolvedMapTemplate = mapTemplate == null ? defaultMapTemplate : mapTemplate;
 		String roomId = nextAvailableRoomId(requestedName);
 		String roomName = requestedName == null || requestedName.isBlank()
 				? toDefaultRoomName(roomId)
@@ -75,13 +79,17 @@ public class RoomRegistry {
 		var entry = new RoomRegistryEntry(
 				roomId,
 				roomName,
-				mapId,
-				mapName,
-				new GameRoom(roomId, roomProperties.updatePeriod().toMillis())
+				resolvedMapTemplate.id(),
+				resolvedMapTemplate.name(),
+				new GameRoom(roomId, roomName, resolvedMapTemplate, roomProperties.updatePeriod().toMillis())
 		);
 		rooms.put(roomId, entry);
 		scheduleEmptyRoomCleanupIfNeeded(roomId);
 		return entry;
+	}
+
+	public synchronized RoomRegistryEntry createRoom(String requestedName, String mapId, String mapName) {
+		return createRoom(requestedName, resolveMapTemplate(mapId, mapName));
 	}
 
 	public GameRoom findRoom(String roomId) {
@@ -175,7 +183,39 @@ public class RoomRegistry {
 				roomId,
 				defaultMapTemplate.id(),
 				defaultMapTemplate.name(),
-				new GameRoom(roomId, roomProperties.updatePeriod().toMillis())
+				new GameRoom(roomId, roomId, defaultMapTemplate, roomProperties.updatePeriod().toMillis())
+		);
+	}
+
+	private MapTemplate resolveMapTemplate(String mapId, String mapName) {
+		if (mapId == null || mapId.isBlank()) {
+			return defaultMapTemplate;
+		}
+		if (mapTemplateRegistry != null) {
+			var resolved = mapTemplateRegistry.get(mapId);
+			if (resolved.isPresent()) {
+				return resolved.get();
+			}
+		}
+		if (mapId.equals(defaultMapTemplate.id())) {
+			return defaultMapTemplate;
+		}
+		return new MapTemplate(
+				mapId,
+				mapName == null || mapName.isBlank() ? mapId : mapName,
+				defaultMapTemplate.region(),
+				defaultMapTemplate.revision(),
+				false,
+				true,
+				defaultMapTemplate.bounds(),
+				defaultMapTemplate.spawnRules(),
+				defaultMapTemplate.files(),
+				defaultMapTemplate.presentation(),
+				defaultMapTemplate.defaultWind(),
+				defaultMapTemplate.colliders(),
+				defaultMapTemplate.spawnPoints(),
+				defaultMapTemplate.pointsOfInterest(),
+				defaultMapTemplate.minimap()
 		);
 	}
 

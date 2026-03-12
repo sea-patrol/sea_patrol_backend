@@ -113,7 +113,7 @@ class RoomJoinControllerTest {
 	@Test
 	void joinRoom_success_returns200_andWsReceivesJoinSequence() throws Exception {
 		String token = loginAndGetToken("user1", "123456");
-		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 7", "caribbean-01", "Caribbean Sea");
+		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox 7", "test-sandbox-01", "Test Sandbox");
 
 		try (ActiveWsConnection connection = openSession(token)) {
 			webTestClient
@@ -127,8 +127,8 @@ class RoomJoinControllerTest {
 					.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
 					.expectBody()
 					.jsonPath("$.roomId").isEqualTo(room.id())
-					.jsonPath("$.mapId").isEqualTo("caribbean-01")
-					.jsonPath("$.mapName").isEqualTo("Caribbean Sea")
+					.jsonPath("$.mapId").isEqualTo("test-sandbox-01")
+					.jsonPath("$.mapName").isEqualTo("Test Sandbox")
 					.jsonPath("$.currentPlayers").isEqualTo(1)
 					.jsonPath("$.maxPlayers").isEqualTo(100)
 					.jsonPath("$.status").isEqualTo("JOINED");
@@ -143,12 +143,23 @@ class RoomJoinControllerTest {
 			double spawnAngle = spawnAssignedMessage.path("payload").path("angle").asDouble();
 			assertThat(spawnAssignedMessage.path("payload").path("roomId").asText()).isEqualTo(room.id());
 			assertThat(spawnAssignedMessage.path("payload").path("reason").asText()).isEqualTo("INITIAL");
-			assertThat(spawnX).isBetween(-30.0, 30.0);
-			assertThat(spawnZ).isBetween(-30.0, 30.0);
-			assertThat(spawnAngle).isEqualTo(0.0);
+			assertThat(spawnX).isBetween(-5.0, 25.0);
+			assertThat(spawnZ).isBetween(-25.0, 5.0);
+			assertThat(spawnAngle).isEqualTo(0.5);
 
 			JsonNode initMessage = awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+			JsonNode roomMeta = initMessage.path("payload").path("roomMeta");
 			JsonNode currentPlayer = initMessage.path("payload").path("players").get(0);
+			assertThat(initMessage.path("payload").path("room").asText()).isEqualTo(room.id());
+			assertThat(roomMeta.path("roomId").asText()).isEqualTo(room.id());
+			assertThat(roomMeta.path("roomName").asText()).isEqualTo("Sandbox 7");
+			assertThat(roomMeta.path("mapId").asText()).isEqualTo("test-sandbox-01");
+			assertThat(roomMeta.path("mapName").asText()).isEqualTo("Test Sandbox");
+			assertThat(roomMeta.path("theme").asText()).isEqualTo("debug");
+			assertThat(roomMeta.path("bounds").path("minX").asDouble()).isEqualTo(-1000.0);
+			assertThat(roomMeta.path("bounds").path("maxX").asDouble()).isEqualTo(1000.0);
+			assertThat(initMessage.path("payload").path("wind").path("angle").asDouble()).isCloseTo(1.57, org.assertj.core.data.Offset.offset(0.01));
+			assertThat(initMessage.path("payload").path("wind").path("speed").asDouble()).isEqualTo(4.0);
 			assertThat(currentPlayer.path("name").asText()).isEqualTo("user1");
 			assertThat(currentPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
 			assertThat(currentPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
@@ -191,6 +202,7 @@ class RoomJoinControllerTest {
 			JsonNode resumedPlayer = resumedInitMessage.path("payload").path("players").get(0);
 			assertThat(seenTypes).doesNotContain(MessageType.SPAWN_ASSIGNED, MessageType.ROOMS_SNAPSHOT);
 			assertThat(resumedInitMessage.path("payload").path("room").asText()).isEqualTo(room.id());
+			assertThat(resumedInitMessage.path("payload").path("roomMeta").path("mapId").asText()).isEqualTo("caribbean-01");
 			assertThat(resumedPlayer.path("name").asText()).isEqualTo("user1");
 			assertThat(resumedPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
 			assertThat(resumedPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));

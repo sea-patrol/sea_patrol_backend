@@ -183,7 +183,8 @@ Response `200 OK`:
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
 - после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
-- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`;
+- initial spawn вычисляется только на backend из `MapTemplate`: anchor берётся из `spawnPoints`, random offset ограничивается `spawnRules.playerSpawnRadius`, а итоговые координаты валидируются по `bounds` карты;
+- `INIT_GAME_STATE` теперь дополнительно включает `roomMeta`, собранный из room runtime и `MapTemplate` (`roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme`, `bounds`);
 - backend также держит отдельный respawn emission path с тем же payload shape и `reason=RESPAWN` для active room player.
 
 Ошибки:
@@ -380,8 +381,8 @@ Payload:
 
 Примечания:
 - spawn/respawn остаётся server-authoritative;
-- initial spawn для current runtime вычисляется backend'ом как random offset вокруг `(0, 0)`;
-- MVP bounds для initial spawn сейчас зафиксированы как `x/z in [-30.0, 30.0]`;
+- initial spawn для current runtime вычисляется backend'ом из `MapTemplate.spawnPoints` и `spawnRules.playerSpawnRadius`;
+- итоговые координаты обязаны попадать в `MapTemplate.bounds` активной комнаты;
 - `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`;
 - текущий runtime уже эмитит `INITIAL` в room join flow и умеет эмитить `RESPAWN` через отдельный backend respawn path; death/combat trigger остаётся задачей следующих wave'ов.
 
@@ -411,7 +412,21 @@ Payload:
 ```json
 {
   "room": "sandbox-1",
-  "wind": {"angle": 0.0, "speed": 0.0},
+  "roomMeta": {
+    "roomId": "sandbox-1",
+    "roomName": "Sandbox 1",
+    "mapId": "caribbean-01",
+    "mapName": "Caribbean Sea",
+    "mapRevision": 1,
+    "theme": "tropical",
+    "bounds": {
+      "minX": -5000.0,
+      "maxX": 5000.0,
+      "minZ": -5000.0,
+      "maxZ": 5000.0
+    }
+  },
+  "wind": {"angle": 0.0, "speed": 10.0},
   "players": [
     {
       "name": "user1",
@@ -420,7 +435,7 @@ Payload:
       "velocity": 0.0,
       "x": 12.5,
       "z": -8.0,
-      "angle": 0.0,
+      "angle": 0.5,
       "model": "model",
       "height": 4.0,
       "width": 7.0,
@@ -480,6 +495,9 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
+
 
 
 
