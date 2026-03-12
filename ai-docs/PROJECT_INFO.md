@@ -36,6 +36,7 @@
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
 - `src/main/resources/worlds` — in-memory map packages (`manifest`, `colliders`, `spawn-points`, `poi`, `minimap` metadata), из которых `MapTemplateRegistry` собирает доступные карты.
+- `src/main/resources/catalogs` — in-memory static catalogs (`ship-classes`, `items`, `merchants`, `quests`), которые `StaticCatalogRegistry` загружает из resource files без БД.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
 - `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
@@ -86,6 +87,8 @@
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
 - `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
 - `MapTemplateRegistry` уже загружает полный map package из `src/main/resources/worlds/*`: `manifest`, `colliders`, `spawn-points`, `poi`, `minimap` metadata и `defaultWind` settings.
+- `StaticCatalogRegistry` теперь так же загружает `ship classes`, `item catalog`, `merchant catalog` и `quest definitions` из `src/main/resources/catalogs/*.json`; это in-memory source of truth для будущих cargo/trade/quest flows.
+- Основные игровые flow по-прежнему не зависят от `Liquibase`/`H2`: пустой стенд поднимается только на resource files + in-memory registries.
 - В текущем production bundle зарегистрированы две карты: default `caribbean-01` и dev/debug `test-sandbox-01`; внешний room REST/WS contract пока не меняется, но обе уже доступны через `mapId` validation в backend.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
@@ -106,9 +109,9 @@
   - `GAME_RECONNECT_GRACE_PERIOD`
 
 - Windows:
-  - `.\gradlew.bat bootRun`
-  - `.\gradlew.bat test`
-  - `.\gradlew.bat build`
+  - `\.\gradlew.bat bootRun`
+  - `\.\gradlew.bat test`
+  - `\.\gradlew.bat build`
 - Linux/macOS:
   - `./gradlew bootRun`
   - `./gradlew test`
@@ -120,12 +123,3 @@
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Empty-room cleanup теперь предсказуем и bounded по `game.room.empty-room-idle-timeout`, но у комнат всё ещё нет owner/host policy или явного manual close flow.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
-
-
-
-
-
-
-
-
-

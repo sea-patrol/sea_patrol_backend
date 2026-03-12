@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "id": "gold-coin",
+      "name": "Gold Coin",
+      "kind": "CURRENCY",
+      "stackable": true,
+      "maxStack": 500,
+      "basePrice": 1
+    },
+    {
+      "id": "wood-log",
+      "name": "Wood Log",
+      "kind": "RESOURCE",
+      "stackable": true,
+      "maxStack": 50,
+      "basePrice": 8
+    },
+    {
+      "id": "fish-basket",
+      "name": "Fish Basket",
+      "kind": "RESOURCE",
+      "stackable": true,
+      "maxStack": 20,
+      "basePrice": 12
+    },
+    {
+      "id": "repair-kit",
+      "name": "Repair Kit",
+      "kind": "SUPPLY",
+      "stackable": true,
+      "maxStack": 10,
+      "basePrice": 35
+    },
+    {
+      "id": "cannonball-crate",
+      "name": "Cannonball Crate",
+      "kind": "AMMO",
+      "stackable": true,
+      "maxStack": 20,
+      "basePrice": 24
+    },
+    {
+      "id": "rum-crate",
+      "name": "Rum Crate",
+      "kind": "TRADE_GOOD",
+      "stackable": true,
+      "maxStack": 20,
+      "basePrice": 18
+    }
+  ]
+}
