@@ -299,6 +299,12 @@ Payload:
 }
 ```
 
+Контрактная заметка `TASK-033A`:
+- текущий runtime ещё не реализует дискретный `sailLevel`, но каноника следующего шага уже зафиксирована;
+- `left/right` остаются командами поворота;
+- `up/down` должны стать rising-edge командами изменения `sailLevel` на `+1/-1`, а не прямым throttle/brake;
+- целевой server-authoritative диапазон `sailLevel`: `0..3`, стартовое значение: `3`.
+
 ## 4.4 Сообщения сервер -> клиент
 ### `CHAT_MESSAGE`
 Payload (`ChatMessage`):
@@ -452,6 +458,10 @@ Payload:
 - `speed` — неотрицательная скалярная сила ветра;
 - `INIT_GAME_STATE.wind` — initial authoritative snapshot room wind.
 
+Контрактная заметка `TASK-033A`:
+- следующий канонический backend шаг (`TASK-033B`) расширяет player state полем `sailLevel`;
+- `INIT_GAME_STATE.players[*].sailLevel` должен означать текущий server-authoritative уровень парусов игрока в диапазоне `0..3`.
+
 ### `UPDATE_GAME_STATE`
 Payload:
 ```json
@@ -475,6 +485,10 @@ Payload:
 - payload shape совпадает с `INIT_GAME_STATE.wind`;
 - это полный текущий authoritative snapshot ветра комнаты, а не delta-патч;
 - до `TASK-035` backend не обещает фиксированную clockwise policy изменения направления, поэтому клиент должен просто применять последнее значение без локальных предположений о вращении.
+
+Контрактная заметка `TASK-033A`:
+- следующий канонический backend шаг (`TASK-033B`) добавляет `players[*].sailLevel` и в `UPDATE_GAME_STATE`;
+- `sailLevel` приходит как часть player patch только при изменении уровня парусов.
 
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
 
