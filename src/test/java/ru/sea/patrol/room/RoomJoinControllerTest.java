@@ -161,6 +161,7 @@ class RoomJoinControllerTest {
 			assertThat(initMessage.path("payload").path("wind").path("angle").asDouble()).isCloseTo(1.57, org.assertj.core.data.Offset.offset(0.01));
 			assertThat(initMessage.path("payload").path("wind").path("speed").asDouble()).isEqualTo(4.0);
 			assertThat(currentPlayer.path("name").asText()).isEqualTo("user1");
+			assertThat(currentPlayer.path("sailLevel").asInt()).isEqualTo(3);
 			assertThat(currentPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
 			assertThat(currentPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
 			assertThat(currentPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
@@ -169,6 +170,7 @@ class RoomJoinControllerTest {
 			assertThat(updateMessage.path("payload").path("wind").path("angle").asDouble()).isBetween(0.0, Math.PI * 2);
 			assertThat(updateMessage.path("payload").path("wind").path("speed").asDouble()).isEqualTo(4.0);
 			assertThat(updateMessage.path("payload").path("players")).hasSize(1);
+			assertThat(updateMessage.path("payload").path("players").get(0).path("sailLevel").asInt()).isEqualTo(3);
 		}
 	}
 
@@ -179,6 +181,9 @@ class RoomJoinControllerTest {
 		double spawnX;
 		double spawnZ;
 		double spawnAngle;
+		double retainedX;
+		double retainedZ;
+		double retainedAngle;
 
 		try (ActiveWsConnection connection = openSession(token)) {
 			webTestClient
@@ -195,7 +200,16 @@ class RoomJoinControllerTest {
 			spawnX = spawnAssignedMessage.path("payload").path("x").asDouble();
 			spawnZ = spawnAssignedMessage.path("payload").path("z").asDouble();
 			spawnAngle = spawnAssignedMessage.path("payload").path("angle").asDouble();
-			awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+			JsonNode initMessage = awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+			JsonNode initialPlayer = initMessage.path("payload").path("players").get(0);
+			assertThat(initialPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(initialPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(initialPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
+			JsonNode updateMessage = awaitMessageOfType(connection, MessageType.UPDATE_GAME_STATE, Duration.ofSeconds(3));
+			JsonNode retainedPlayer = updateMessage.path("payload").path("players").get(0);
+			retainedX = retainedPlayer.path("x").asDouble();
+			retainedZ = retainedPlayer.path("z").asDouble();
+			retainedAngle = retainedPlayer.path("angle").asDouble();
 		}
 
 		try (ActiveWsConnection resumedConnection = openSession(token)) {
@@ -209,9 +223,10 @@ class RoomJoinControllerTest {
 			assertThat(resumedInitMessage.path("payload").path("room").asText()).isEqualTo(room.id());
 			assertThat(resumedInitMessage.path("payload").path("roomMeta").path("mapId").asText()).isEqualTo("caribbean-01");
 			assertThat(resumedPlayer.path("name").asText()).isEqualTo("user1");
-			assertThat(resumedPlayer.path("x").asDouble()).isCloseTo(spawnX, org.assertj.core.data.Offset.offset(0.0001));
-			assertThat(resumedPlayer.path("z").asDouble()).isCloseTo(spawnZ, org.assertj.core.data.Offset.offset(0.0001));
-			assertThat(resumedPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(resumedPlayer.path("sailLevel").asInt()).isEqualTo(3);
+			assertThat(resumedPlayer.path("x").asDouble()).isCloseTo(retainedX, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(resumedPlayer.path("z").asDouble()).isCloseTo(retainedZ, org.assertj.core.data.Offset.offset(0.0001));
+			assertThat(resumedPlayer.path("angle").asDouble()).isCloseTo(retainedAngle, org.assertj.core.data.Offset.offset(0.0001));
 		}
 	}
 

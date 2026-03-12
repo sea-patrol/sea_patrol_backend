@@ -239,6 +239,7 @@ public class GameRoom {
 										p.getHealth(),
 										p.getMaxHealth(),
 										p.getShip().getVelocity(),
+										p.getShip().getSailLevel(),
 										p.getShip().getFrontendX(),
 										p.getShip().getFrontendZ(),
 										p.getShip().getOrientation(),
@@ -266,6 +267,7 @@ public class GameRoom {
 									player.getName(),
 									player.getHealth(),
 									player.getShip().getVelocity(),
+									player.getShip().getSailLevel(),
 									player.getShip().getFrontendX(),
 									player.getShip().getFrontendZ(),
 									player.getShip().getOrientation()
@@ -288,6 +290,7 @@ public class GameRoom {
 						player.getHealth(),
 						player.getMaxHealth(),
 						player.getShip() == null ? 0.0f : player.getShip().getVelocity(),
+						player.getShip() == null ? player.getSailLevel() : player.getShip().getSailLevel(),
 						player.getShip() == null ? player.getX() : player.getShip().getFrontendX(),
 						player.getShip() == null ? player.getZ() : player.getShip().getFrontendZ(),
 						player.getShip() == null ? player.getAngle() : player.getShip().getOrientation(),

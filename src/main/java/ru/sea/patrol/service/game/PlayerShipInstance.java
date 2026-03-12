@@ -10,7 +10,12 @@ import ru.sea.patrol.ws.protocol.dto.PlayerInputMessage;
 
 public class PlayerShipInstance {
 
+  private static final PlayerInputMessage EMPTY_INPUT = new PlayerInputMessage(false, false, false, false);
+  private static final int MIN_SAIL_LEVEL = 0;
+  private static final int MAX_SAIL_LEVEL = 3;
+  private static final float[] SAIL_LEVEL_FACTORS = {0.0f, 0.35f, 0.7f, 1.0f};
   private final Body body;
+  private final Player player;
   private static final float MAX_FORCE_RATIO = 30f;
   private static final float TURN_FORCE_RATIO = 2f;
   private static final float MIN_SAIL_EFFICIENCY = 0.2f;
@@ -20,13 +25,16 @@ public class PlayerShipInstance {
   private static final float WIND_REFERENCE_SPEED = 10f;
   private static final float MIN_WIND_SPEED_FACTOR = 0.25f;
   private static final float MAX_WIND_SPEED_FACTOR = 2.0f;
-  private static final float REVERSE_THRUST_FACTOR = 0.35f;
 
   private PlayerInputMessage input;
+  private PlayerInputMessage previousInput;
+  private int sailLevel;
+  private boolean frozen;
 
   private float force = 0f;
 
   public PlayerShipInstance(World world, Player player) {
+    this.player = player;
     BodyDef def = new BodyDef();
     def.type = BodyDef.BodyType.DynamicBody;
     def.position.set(player.getZ(), player.getX());
@@ -48,32 +56,29 @@ public class PlayerShipInstance {
     body.setAngularDamping(0.8f);
     body.setLinearDamping(0.8f);
 
-    input = new PlayerInputMessage(false, false, false, false);
+    input = EMPTY_INPUT;
+    previousInput = EMPTY_INPUT;
+    sailLevel = clampSailLevel(player.getSailLevel());
+    frozen = false;
+    this.player.setSailLevel(sailLevel);
     this.force = player.getWidth() * player.getLength() * MAX_FORCE_RATIO;
   }
 
   public void update(float delta, Wind wind) {
-    if (input == null) {
+    if (frozen) {
       return;
     }
-
-    float thrust = 0;
+    PlayerInputMessage currentInput = input == null ? EMPTY_INPUT : input;
     float shipAngle = body.getAngle();
-
-    if (input.up()) {
-      thrust += calculateSailDriveMultiplier(shipAngle, wind);
-    }
-    if (input.down()) {
-      thrust -= REVERSE_THRUST_FACTOR;
-    }
+    float thrust = sailThrustFactor(sailLevel) * calculateSailDriveMultiplier(shipAngle, wind);
 
     Vector2 forceVector = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
             .scl(thrust * this.force);
 
     body.applyForceToCenter(forceVector, true);
 
-    if (input.left()) body.applyTorque(TURN_FORCE_RATIO * force, true);
-    if (input.right()) body.applyTorque(-TURN_FORCE_RATIO * force, true);
+    if (isPressed(currentInput.left())) body.applyTorque(TURN_FORCE_RATIO * force, true);
+    if (isPressed(currentInput.right())) body.applyTorque(-TURN_FORCE_RATIO * force, true);
   }
 
   public Vector2 getPosition() {
@@ -107,13 +112,29 @@ public class PlayerShipInstance {
   }
 
   public void setInput(PlayerInputMessage input) {
-    this.input = input;
+    PlayerInputMessage normalizedInput = input == null ? EMPTY_INPUT : input;
+    if (isPressed(normalizedInput.up()) && !isPressed(previousInput.up())) {
+      sailLevel = clampSailLevel(sailLevel + 1);
+    }
+    if (isPressed(normalizedInput.down()) && !isPressed(previousInput.down())) {
+      sailLevel = clampSailLevel(sailLevel - 1);
+    }
+    player.setSailLevel(sailLevel);
+    previousInput = normalizedInput;
+    this.input = normalizedInput;
+    this.frozen = false;
   }
 
   public void freeze() {
-    input = new PlayerInputMessage(false, false, false, false);
+    input = EMPTY_INPUT;
+    previousInput = EMPTY_INPUT;
+    frozen = true;
     body.setLinearVelocity(0f, 0f);
     body.setAngularVelocity(0f);
+  }
+
+  public int getSailLevel() {
+    return sailLevel;
   }
 
   public float getFrontendX() {
@@ -155,5 +176,17 @@ public class PlayerShipInstance {
 
   private static float clamp(float value, float min, float max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  private static float sailThrustFactor(int sailLevel) {
+    return SAIL_LEVEL_FACTORS[clampSailLevel(sailLevel)];
+  }
+
+  private static int clampSailLevel(int sailLevel) {
+    return Math.max(MIN_SAIL_LEVEL, Math.min(MAX_SAIL_LEVEL, sailLevel));
+  }
+
+  private static boolean isPressed(Boolean value) {
+    return Boolean.TRUE.equals(value);
   }
 }

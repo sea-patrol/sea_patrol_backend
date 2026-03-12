@@ -299,11 +299,11 @@ Payload:
 }
 ```
 
-Контрактная заметка `TASK-033A`:
-- текущий runtime ещё не реализует дискретный `sailLevel`, но каноника следующего шага уже зафиксирована;
+Текущее состояние после `TASK-033B`:
 - `left/right` остаются командами поворота;
-- `up/down` должны стать rising-edge командами изменения `sailLevel` на `+1/-1`, а не прямым throttle/brake;
-- целевой server-authoritative диапазон `sailLevel`: `0..3`, стартовое значение: `3`.
+- `up/down` на backend уже трактуются как rising-edge команды изменения `sailLevel` на `+1/-1`, а не как прямой throttle/brake;
+- `sailLevel` является server-authoritative состоянием в диапазоне `0..3`;
+- стартовое значение для нового room player: `3`.
 
 ## 4.4 Сообщения сервер -> клиент
 ### `CHAT_MESSAGE`
@@ -439,6 +439,7 @@ Payload:
       "health": 500,
       "maxHealth": 500,
       "velocity": 0.0,
+      "sailLevel": 3,
       "x": 12.5,
       "z": -8.0,
       "angle": 0.5,
@@ -458,9 +459,9 @@ Payload:
 - `speed` — неотрицательная скалярная сила ветра;
 - `INIT_GAME_STATE.wind` — initial authoritative snapshot room wind.
 
-Контрактная заметка `TASK-033A`:
-- следующий канонический backend шаг (`TASK-033B`) расширяет player state полем `sailLevel`;
-- `INIT_GAME_STATE.players[*].sailLevel` должен означать текущий server-authoritative уровень парусов игрока в диапазоне `0..3`.
+Состояние после `TASK-033B`:
+- `INIT_GAME_STATE.players[*].sailLevel` уже приходит из backend runtime;
+- поле означает текущий server-authoritative уровень парусов игрока в диапазоне `0..3`.
 
 ### `UPDATE_GAME_STATE`
 Payload:
@@ -473,6 +474,7 @@ Payload:
       "name": "user1",
       "health": 500,
       "velocity": 0.0,
+      "sailLevel": 3,
       "x": 12.5,
       "z": -8.0,
       "angle": 0.0
@@ -486,9 +488,9 @@ Payload:
 - это полный текущий authoritative snapshot ветра комнаты, а не delta-патч;
 - до `TASK-035` backend не обещает фиксированную clockwise policy изменения направления, поэтому клиент должен просто применять последнее значение без локальных предположений о вращении.
 
-Контрактная заметка `TASK-033A`:
-- следующий канонический backend шаг (`TASK-033B`) добавляет `players[*].sailLevel` и в `UPDATE_GAME_STATE`;
-- `sailLevel` приходит как часть player patch только при изменении уровня парусов.
+Состояние после `TASK-033B`:
+- `players[*].sailLevel` уже приходит и в `UPDATE_GAME_STATE`;
+- текущий backend runtime включает `sailLevel` в player state этого сообщения как часть authoritative snapshot игрока.
 
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
 
@@ -499,7 +501,8 @@ Payload:
 
 Текущее состояние по `TASK-033`:
 - backend ship movement уже использует тот же room-level `wind` runtime state;
-- при `PLAYER_INPUT.up` итоговая тяга зависит от силы ветра и относительного угла между курсом корабля и направлением ветра;
+- `PLAYER_INPUT.up/down` больше не дают прямую тягу, а меняют `sailLevel` по rising-edge;
+- итоговая тяга зависит от силы ветра, относительного угла между курсом корабля и направлением ветра и текущего `sailLevel`;
 - в текущей простой модели `beam reach` даёт больше drive, чем чистый `tailwind`, а `headwind` заметно ослабляет ускорение, но не переводит модель в сложную аэродинамику.
 
 ## 5. Формат ошибок

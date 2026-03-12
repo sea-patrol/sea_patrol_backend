@@ -94,6 +94,8 @@
 - `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
 - `GameRoom` также уже хранит room-local authoritative wind state: один и тот же `wind` snapshot включается в `INIT_GAME_STATE` как initial room state и затем приходит в каждом `UPDATE_GAME_STATE` для всех игроков комнаты.
 - По состоянию на `TASK-033` ship movement на backend уже зависит от `wind`: `PlayerShipInstance` считает sail drive из силы ветра, относительного угла между курсом корабля и направлением ветра и затем применяет server-authoritative тягу в Box2D world.
+- По состоянию на `TASK-033B` у игрока есть server-authoritative `sailLevel` (`0..3`, default `3`): `PLAYER_INPUT.up/down` меняют его по rising-edge, а итоговая тяга теперь зависит и от room `wind`, и от текущего уровня парусов.
+- Во время reconnect grace `PlayerShipInstance.freeze()` останавливает drift retained ship state, поэтому room resume возвращает игрока в ту же комнату без нового spawn и без нежелательного смещения позиции на стороне backend.
 - Initial spawn для room join вычисляется backend'ом из `spawnPoints` + `spawnRules.playerSpawnRadius` и валидируется по `MapTemplate.bounds`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.
