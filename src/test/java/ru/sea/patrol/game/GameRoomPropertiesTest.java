@@ -23,6 +23,7 @@ class GameRoomPropertiesTest {
 		assertThat(gameService.getRoomUpdatePeriodMillis()).isEqualTo(100L);
 		assertThat(gameService.getReconnectGracePeriod()).isEqualTo(Duration.ofSeconds(15));
 		assertThat(gameService.getEmptyRoomIdleTimeout()).isEqualTo(Duration.ofSeconds(30));
+		assertThat(gameService.getWindRotationSpeedRadPerSecond()).isCloseTo(0.17453292d, org.assertj.core.data.Offset.offset(0.0000001d));
 	}
 }
 
@@ -34,7 +35,8 @@ class GameRoomPropertiesTest {
 				"game.room.max-players-per-room=24",
 				"game.room.update-period=250ms",
 				"game.room.reconnect-grace-period=45s",
-				"game.room.empty-room-idle-timeout=60s"
+				"game.room.empty-room-idle-timeout=60s",
+				"game.room.wind-rotation-speed=0.52359878"
 		}
 )
 class GameRoomPropertiesOverrideTest {
@@ -50,5 +52,6 @@ class GameRoomPropertiesOverrideTest {
 		assertThat(gameService.getRoomUpdatePeriodMillis()).isEqualTo(250L);
 		assertThat(gameService.getReconnectGracePeriod()).isEqualTo(Duration.ofSeconds(45));
 		assertThat(gameService.getEmptyRoomIdleTimeout()).isEqualTo(Duration.ofSeconds(60));
+		assertThat(gameService.getWindRotationSpeedRadPerSecond()).isCloseTo(0.52359878d, org.assertj.core.data.Offset.offset(0.0000001d));
 	}
 }

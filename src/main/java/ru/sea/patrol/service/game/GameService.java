@@ -72,6 +72,10 @@ public class GameService {
 		return roomProperties.updatePeriod().toMillis();
 	}
 
+	public double getWindRotationSpeedRadPerSecond() {
+		return roomProperties.windRotationSpeed();
+	}
+
 	public void prepareRoomJoin(String playerName, String roomId) {
 		var room = roomRegistry.findRoom(roomId);
 		if (room == null) {

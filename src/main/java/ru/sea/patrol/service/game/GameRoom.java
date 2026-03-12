@@ -56,12 +56,17 @@ public class GameRoom {
 
 	@Getter
 	private final long updatePeriodMillis;
+	private final float windRotationSpeedRadPerSecond;
 
 	public GameRoom(String roomId, long updatePeriodMillis) {
-		this(roomId, roomId, MapTemplate.mvpDefault(), updatePeriodMillis);
+		this(roomId, roomId, MapTemplate.mvpDefault(), updatePeriodMillis, Wind.DEFAULT_ROTATION_SPEED_RAD_PER_SECOND);
 	}
 
 	public GameRoom(String roomId, String roomName, MapTemplate mapTemplate, long updatePeriodMillis) {
+		this(roomId, roomName, mapTemplate, updatePeriodMillis, Wind.DEFAULT_ROTATION_SPEED_RAD_PER_SECOND);
+	}
+
+	public GameRoom(String roomId, String roomName, MapTemplate mapTemplate, long updatePeriodMillis, double windRotationSpeedRadPerSecond) {
 		if (updatePeriodMillis <= 0) {
 			throw new IllegalArgumentException("updatePeriodMillis must be greater than zero");
 		}
@@ -69,6 +74,7 @@ public class GameRoom {
 		this.roomName = roomName == null || roomName.isBlank() ? roomId : roomName.trim();
 		this.mapTemplate = mapTemplate == null ? MapTemplate.mvpDefault() : mapTemplate;
 		this.updatePeriodMillis = updatePeriodMillis;
+		this.windRotationSpeedRadPerSecond = (float) Math.max(0.0d, windRotationSpeedRadPerSecond);
 		this.sink = Sinks.many().multicast().directBestEffort();
 	}
 
@@ -143,7 +149,11 @@ public class GameRoom {
 		}
 
 		world = new World(new Vector2(0, 0), true);
-		wind = new Wind((float) mapTemplate.defaultWind().angle(), (float) mapTemplate.defaultWind().speed());
+		wind = new Wind(
+				(float) mapTemplate.defaultWind().angle(),
+				(float) mapTemplate.defaultWind().speed(),
+				windRotationSpeedRadPerSecond
+		);
 		for (var player : players.values()) {
 			player.createShipInstanceInGameWorld(world);
 		}
@@ -311,6 +321,6 @@ public class GameRoom {
 	}
 
 	private WindInfo toWindInfo() {
-		return new WindInfo(wind.getDirection().angleRad(), wind.getSpeed());
+		return new WindInfo(wind.getAngleRad(), wind.getSpeed());
 	}
 }

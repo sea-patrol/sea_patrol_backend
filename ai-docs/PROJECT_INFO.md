@@ -70,6 +70,7 @@
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
+- Room wind rotation тоже конфигурируется на уровне backend через `game.room.wind-rotation-speed` (MVP default: `0.17453292 rad/s`, то есть примерно `10°/s`).
 - После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`) удерживает room-bound runtime state для controlled resume.
 - Если пользователь отключился из комнаты и после этого она осталась без других активных игроков, backend удерживает её в `RoomRegistry` до окончания reconnect grace; `currentPlayers` в lobby catalog не уменьшается мгновенно, потому что disconnected player остаётся частью retained room state до timeout.
 - Reconnect в течение grace восстанавливает ту же room binding и текущего игрока в той же комнате: backend повторно шлёт `ROOM_JOINED` и `INIT_GAME_STATE`, но не делает новый spawn.
@@ -93,6 +94,7 @@
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
 - `GameRoom` также уже хранит room-local authoritative wind state: один и тот же `wind` snapshot включается в `INIT_GAME_STATE` как initial room state и затем приходит в каждом `UPDATE_GAME_STATE` для всех игроков комнаты.
+- По состоянию на `TASK-035` room wind больше не меняется случайным шумом: backend вращает его по часовой стрелке с фиксированной room-wide скоростью, так что все игроки комнаты видят одинаковый предсказуемый drift направления.
 - По состоянию на `TASK-033` ship movement на backend уже зависит от `wind`: `PlayerShipInstance` считает sail drive из силы ветра, относительного угла между курсом корабля и направлением ветра и затем применяет server-authoritative тягу в Box2D world.
 - По состоянию на `TASK-033B` у игрока есть server-authoritative `sailLevel` (`0..3`, default `3`): `PLAYER_INPUT.up/down` меняют его по rising-edge, а итоговая тяга теперь зависит и от room `wind`, и от текущего уровня парусов.
 - Во время reconnect grace `PlayerShipInstance.freeze()` останавливает drift retained ship state, поэтому room resume возвращает игрока в ту же комнату без нового spawn и без нежелательного смещения позиции на стороне backend.
@@ -111,6 +113,8 @@
   - `GAME_MAX_ROOMS`
   - `GAME_MAX_PLAYERS_PER_ROOM`
   - `GAME_RECONNECT_GRACE_PERIOD`
+  - `GAME_EMPTY_ROOM_IDLE_TIMEOUT`
+  - `GAME_WIND_ROTATION_SPEED`
 
 - Windows:
   - `\.\gradlew.bat bootRun`

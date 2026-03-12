@@ -118,6 +118,50 @@ class GameRoomPhysicsTest {
 	}
 
 	@Test
+	void update_withoutScheduler_rotatesWindClockwise() throws Exception {
+		MapTemplate defaultMap = MapTemplate.mvpDefault();
+		MapTemplate clockwiseMap = new MapTemplate(
+				"clockwise-room",
+				"Clockwise Room",
+				defaultMap.region(),
+				defaultMap.revision(),
+				false,
+				true,
+				defaultMap.bounds(),
+				defaultMap.spawnRules(),
+				defaultMap.files(),
+				defaultMap.presentation(),
+				new MapTemplate.WindSettings(Math.PI / 2, 10.0),
+				defaultMap.colliders(),
+				defaultMap.spawnPoints(),
+				defaultMap.pointsOfInterest(),
+				defaultMap.minimap()
+		);
+		GameRoom room = new GameRoom("wind-room", "Wind Room", clockwiseMap, 100L, Math.PI / 2);
+		Player player = createPlayer("p1");
+		room.join(player);
+
+		CompletableFuture<MessageOutput> initFuture = player.getSink().asFlux().next().toFuture();
+		CompletableFuture<MessageOutput> updateFuture = player.getSink().asFlux().skip(1).next().toFuture();
+
+		room.start(false);
+		try {
+			MessageOutput initMessage = initFuture.get(2, TimeUnit.SECONDS);
+			Thread.sleep(150L);
+			room.update();
+			MessageOutput updateMessage = updateFuture.get(2, TimeUnit.SECONDS);
+
+			InitGameStateMessage initPayload = (InitGameStateMessage) initMessage.getPayload();
+			UpdateGameStateMessage updatePayload = (UpdateGameStateMessage) updateMessage.getPayload();
+
+			assertThat(updatePayload.wind().angle()).isLessThan(initPayload.wind().angle());
+			assertThat(updatePayload.wind().speed()).isEqualTo(initPayload.wind().speed());
+		} finally {
+			room.stop();
+		}
+	}
+
+	@Test
 	void startStop_multipleCycles_staysStable() {
 		for (int i = 0; i < 3; i++) {
 			GameRoom room = new GameRoom("room-" + i, 100L);

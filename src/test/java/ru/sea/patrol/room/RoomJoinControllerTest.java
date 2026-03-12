@@ -167,7 +167,8 @@ class RoomJoinControllerTest {
 			assertThat(currentPlayer.path("angle").asDouble()).isCloseTo(spawnAngle, org.assertj.core.data.Offset.offset(0.0001));
 
 			JsonNode updateMessage = awaitMessageOfType(connection, MessageType.UPDATE_GAME_STATE, Duration.ofSeconds(3));
-			assertThat(updateMessage.path("payload").path("wind").path("angle").asDouble()).isBetween(0.0, Math.PI * 2);
+			assertThat(updateMessage.path("payload").path("wind").path("angle").asDouble()).isLessThan(1.57);
+			assertThat(updateMessage.path("payload").path("wind").path("angle").asDouble()).isGreaterThanOrEqualTo(0.0);
 			assertThat(updateMessage.path("payload").path("wind").path("speed").asDouble()).isEqualTo(4.0);
 			assertThat(updateMessage.path("payload").path("players")).hasSize(1);
 			assertThat(updateMessage.path("payload").path("players").get(0).path("sailLevel").asInt()).isEqualTo(3);

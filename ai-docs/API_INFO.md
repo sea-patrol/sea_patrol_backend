@@ -486,7 +486,8 @@ Payload:
 Семантика `UPDATE_GAME_STATE.wind`:
 - payload shape совпадает с `INIT_GAME_STATE.wind`;
 - это полный текущий authoritative snapshot ветра комнаты, а не delta-патч;
-- до `TASK-035` backend не обещает фиксированную clockwise policy изменения направления, поэтому клиент должен просто применять последнее значение без локальных предположений о вращении.
+- backend теперь вращает `wind.angle` по часовой стрелке с фиксированной room-wide скоростью `game.room.wind-rotation-speed` (MVP default: `0.17453292 rad/s`, то есть примерно `10°/s`);
+- clockwise в канонической системе `XZ` означает уменьшение угла во времени с нормализацией обратно в диапазон `[0, 2π)`.
 
 Состояние после `TASK-033B`:
 - `players[*].sailLevel` уже приходит и в `UPDATE_GAME_STATE`;
@@ -494,10 +495,10 @@ Payload:
 
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
 
-Текущее состояние по `TASK-031`:
+Текущее состояние по `TASK-035`:
 - authoritative `wind` уже хранится на уровне `GameRoom`, а не вычисляется отдельно на клиентах;
 - один и тот же `wind` snapshot рассылается всем игрокам конкретной комнаты через `INIT_GAME_STATE` и `UPDATE_GAME_STATE`;
-- следующая backend-задача по ветру (`TASK-035`) меняет уже не transport contract, а runtime policy обновления направления ветра.
+- runtime policy уже больше не случайная: `Wind.update(delta)` вращает направление предсказуемо и одинаково для всех игроков комнаты.
 
 Текущее состояние по `TASK-033`:
 - backend ship movement уже использует тот же room-level `wind` runtime state;

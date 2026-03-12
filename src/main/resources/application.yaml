@@ -20,3 +20,4 @@ game:
     max-players-per-room: ${GAME_MAX_PLAYERS_PER_ROOM:100}
     reconnect-grace-period: ${GAME_RECONNECT_GRACE_PERIOD:15s}
     empty-room-idle-timeout: ${GAME_EMPTY_ROOM_IDLE_TIMEOUT:30s}
+    wind-rotation-speed: ${GAME_WIND_ROTATION_SPEED:0.17453292}

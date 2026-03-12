@@ -17,7 +17,8 @@ class GameSessionRegistryTest {
 				100,
 				Duration.ofMillis(100),
 				reconnectGracePeriod,
-				emptyRoomIdleTimeout
+				emptyRoomIdleTimeout,
+				0.17453292
 		);
 	}
 
