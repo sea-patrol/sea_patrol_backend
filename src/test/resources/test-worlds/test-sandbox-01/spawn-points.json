@@ -1,0 +1,10 @@
+{
+  "playerSpawnPoints": [
+    {
+      "id": "debug-spawn",
+      "x": 10.0,
+      "z": -10.0,
+      "angle": 0.5
+    }
+  ]
+}

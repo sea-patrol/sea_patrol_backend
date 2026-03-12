@@ -1,0 +1,11 @@
+{
+  "pointsOfInterest": [
+    {
+      "id": "test-port",
+      "name": "Test Port",
+      "kind": "PORT",
+      "x": 80.0,
+      "z": -40.0
+    }
+  ]
+}

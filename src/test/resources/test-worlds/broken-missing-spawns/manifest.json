@@ -1,34 +1,34 @@
 {
-  "id": "test-sandbox-01",
-  "name": "Test Sandbox",
-  "region": "dev",
+  "id": "broken-missing-spawns",
+  "name": "Broken Missing Spawns",
+  "region": "broken",
   "revision": 1,
   "enabled": true,
   "defaultMap": false,
   "bounds": {
-    "minX": -1000.0,
-    "maxX": 1000.0,
-    "minZ": -1000.0,
-    "maxZ": 1000.0
+    "minX": -500.0,
+    "maxX": 500.0,
+    "minZ": -500.0,
+    "maxZ": 500.0
   },
   "spawnRules": {
     "playerSpawnMode": "POINTS",
-    "playerSpawnRadius": 15.0,
+    "playerSpawnRadius": 10.0,
     "npcSpawnEnabled": false,
     "resourceSpawnEnabled": false
   },
   "files": {
     "colliders": "colliders.json",
-    "spawnPoints": "spawn-points.json",
+    "spawnPoints": "missing-spawn-points.json",
     "poi": "poi.json",
     "minimap": "minimap.json"
   },
   "presentation": {
-    "theme": "debug",
+    "theme": "broken",
     "previewImage": null
   },
   "defaultWind": {
-    "angle": 1.57,
-    "speed": 4.0
+    "angle": 0.0,
+    "speed": 2.0
   }
 }

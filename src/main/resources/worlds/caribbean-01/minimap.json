@@ -1,0 +1,9 @@
+{
+  "overlayImage": null,
+  "calibration": {
+    "worldMinX": -5000.0,
+    "worldMaxX": 5000.0,
+    "worldMinZ": -5000.0,
+    "worldMaxZ": 5000.0
+  }
+}

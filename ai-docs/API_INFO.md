@@ -113,8 +113,8 @@ Response `200 OK`:
 - `rooms` может быть пустым массивом;
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
-- `mapId` и `mapName` теперь резолвятся через in-memory `MapTemplateRegistry`, который загружает manifest-файлы из `src/main/resources/worlds/*`;
-- в текущем production bundle зарегистрирована только карта `caribbean-01`, поэтому room catalog пока всё ещё возвращает `Caribbean Sea` для всех доступных комнат;
+- `mapId` и `mapName` теперь резолвятся через in-memory `MapTemplateRegistry`, который валидирует полный map package из `src/main/resources/worlds/*`;
+- в текущем production bundle зарегистрирована первая рабочая карта `caribbean-01`, уже содержащая `bounds/colliders`, `spawn-points`, `poi`, `minimap` metadata и `defaultWind`;
 - пустая комната удаляется из registry не сразу: сначала в ней не должно остаться активных игроков и room-bound reconnect grace, после чего backend ждёт отдельный `game.room.empty-room-idle-timeout` (MVP default: `30s`).
 
 ### 3.6 `POST /api/v1/rooms`
