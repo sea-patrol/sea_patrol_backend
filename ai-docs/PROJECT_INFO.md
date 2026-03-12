@@ -93,6 +93,7 @@
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
 - `GameRoom` также уже хранит room-local authoritative wind state: один и тот же `wind` snapshot включается в `INIT_GAME_STATE` как initial room state и затем приходит в каждом `UPDATE_GAME_STATE` для всех игроков комнаты.
+- По состоянию на `TASK-033` ship movement на backend уже зависит от `wind`: `PlayerShipInstance` считает sail drive из силы ветра, относительного угла между курсом корабля и направлением ветра и затем применяет server-authoritative тягу в Box2D world.
 - Initial spawn для room join вычисляется backend'ом из `spawnPoints` + `spawnRules.playerSpawnRadius` и валидируется по `MapTemplate.bounds`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.

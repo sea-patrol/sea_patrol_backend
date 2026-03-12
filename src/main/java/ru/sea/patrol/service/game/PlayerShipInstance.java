@@ -13,6 +13,14 @@ public class PlayerShipInstance {
   private final Body body;
   private static final float MAX_FORCE_RATIO = 30f;
   private static final float TURN_FORCE_RATIO = 2f;
+  private static final float MIN_SAIL_EFFICIENCY = 0.2f;
+  private static final float BEAM_REACH_WEIGHT = 0.9f;
+  private static final float TAILWIND_WEIGHT = 0.55f;
+  private static final float HEADWIND_PENALTY = 0.65f;
+  private static final float WIND_REFERENCE_SPEED = 10f;
+  private static final float MIN_WIND_SPEED_FACTOR = 0.25f;
+  private static final float MAX_WIND_SPEED_FACTOR = 2.0f;
+  private static final float REVERSE_THRUST_FACTOR = 0.35f;
 
   private PlayerInputMessage input;
 
@@ -50,13 +58,15 @@ public class PlayerShipInstance {
     }
 
     float thrust = 0;
+    float shipAngle = body.getAngle();
 
     if (input.up()) {
-      thrust += 1;
+      thrust += calculateSailDriveMultiplier(shipAngle, wind);
     }
-    if (input.down()) thrust -= 0.5f;
+    if (input.down()) {
+      thrust -= REVERSE_THRUST_FACTOR;
+    }
 
-    float shipAngle = body.getAngle();
     Vector2 forceVector = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle))
             .scl(thrust * this.force);
 
@@ -112,5 +122,38 @@ public class PlayerShipInstance {
 
   public float getFrontendZ() {
     return body.getPosition().x;
+  }
+
+  private static float calculateSailDriveMultiplier(float shipAngle, Wind wind) {
+    if (wind == null || wind.getDirection() == null) {
+      return MIN_SAIL_EFFICIENCY;
+    }
+
+    Vector2 shipForward = new Vector2((float) Math.cos(shipAngle), (float) Math.sin(shipAngle));
+    float alignment = shipForward.dot(wind.getDirection());
+    float beamReachFactor = 1f - Math.abs(alignment);
+    float tailwindFactor = Math.max(0f, alignment);
+    float headwindFactor = Math.max(0f, -alignment);
+
+    float sailEfficiency = clamp(
+        MIN_SAIL_EFFICIENCY
+            + beamReachFactor * BEAM_REACH_WEIGHT
+            + tailwindFactor * TAILWIND_WEIGHT
+            - headwindFactor * HEADWIND_PENALTY,
+        0.1f,
+        1.5f
+    );
+
+    float windSpeedFactor = clamp(
+        wind.getSpeed() / WIND_REFERENCE_SPEED,
+        MIN_WIND_SPEED_FACTOR,
+        MAX_WIND_SPEED_FACTOR
+    );
+
+    return sailEfficiency * windSpeedFactor;
+  }
+
+  private static float clamp(float value, float min, float max) {
+    return Math.max(min, Math.min(max, value));
   }
 }

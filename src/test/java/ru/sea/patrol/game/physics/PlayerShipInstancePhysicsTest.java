@@ -42,6 +42,25 @@ class PlayerShipInstancePhysicsTest extends Box2DTestBase {
 	}
 
 	@Test
+	void sailingSpeed_differsForTailwindBeamAndHeadwind() {
+		float tailwindSpeed = accelerateWithWind(new Wind(0f, 10f));
+		float beamReachSpeed = accelerateWithWind(new Wind((float) (Math.PI / 2), 10f));
+		float headwindSpeed = accelerateWithWind(new Wind((float) Math.PI, 10f));
+
+		assertThat(beamReachSpeed).isGreaterThan(tailwindSpeed);
+		assertThat(tailwindSpeed).isGreaterThan(headwindSpeed);
+		assertThat(headwindSpeed).isGreaterThan(0.05f);
+	}
+
+	@Test
+	void strongerWind_increasesAccelerationForSameCourse() {
+		float lowWindSpeed = accelerateWithWind(new Wind(0f, 4f));
+		float highWindSpeed = accelerateWithWind(new Wind(0f, 12f));
+
+		assertThat(highWindSpeed).isGreaterThan(lowWindSpeed);
+	}
+
+	@Test
 	void turnLeft_changesOrientationPositive() {
 		ship = createShip();
 		ship.setInput(new PlayerInputMessage(true, false, false, false));
@@ -97,6 +116,21 @@ class PlayerShipInstancePhysicsTest extends Box2DTestBase {
 			ship.update(TIME_STEP, wind);
 			world.step(TIME_STEP, VELOCITY_ITERS, POSITION_ITERS);
 		}
+	}
+
+	private float accelerateWithWind(Wind windModel) {
+		ship = createShip();
+		ship.setInput(new PlayerInputMessage(false, false, true, false));
+
+		for (int i = 0; i < 120; i++) {
+			ship.update(TIME_STEP, windModel);
+			world.step(TIME_STEP, VELOCITY_ITERS, POSITION_ITERS);
+		}
+
+		float speed = ship.getVelocity();
+		ship.dispose();
+		ship = null;
+		return speed;
 	}
 
 	private PlayerShipInstance createShip() {
