@@ -1,0 +1,18 @@
+{
+  "pointsOfInterest": [
+    {
+      "id": "port-royal",
+      "name": "Port Royal",
+      "kind": "PORT",
+      "x": 120.0,
+      "z": -80.0
+    },
+    {
+      "id": "open-sea-marker",
+      "name": "Open Sea",
+      "kind": "LANDMARK",
+      "x": -640.0,
+      "z": 920.0
+    }
+  ]
+}

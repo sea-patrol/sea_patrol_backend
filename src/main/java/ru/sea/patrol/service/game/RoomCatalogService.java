@@ -6,22 +6,27 @@ import ru.sea.patrol.error.domain.ConflictException;
 import ru.sea.patrol.room.api.dto.RoomCatalogResponseDto;
 import ru.sea.patrol.room.api.dto.RoomCreateRequestDto;
 import ru.sea.patrol.room.api.dto.RoomSummaryDto;
+import ru.sea.patrol.service.game.map.MapTemplate;
+import ru.sea.patrol.service.game.map.MapTemplateRegistry;
 
 @Service
 public class RoomCatalogService {
-
-	public static final String DEFAULT_MAP_ID = "caribbean-01";
-	public static final String DEFAULT_MAP_NAME = "Caribbean Sea";
 
 	private static final String ERROR_CODE_INVALID_MAP_ID = "INVALID_MAP_ID";
 	private static final String ERROR_CODE_MAX_ROOMS_REACHED = "MAX_ROOMS_REACHED";
 
 	private final RoomRegistry roomRegistry;
 	private final GameRoomProperties roomProperties;
+	private final MapTemplateRegistry mapTemplateRegistry;
 
-	public RoomCatalogService(RoomRegistry roomRegistry, GameRoomProperties roomProperties) {
+	public RoomCatalogService(
+			RoomRegistry roomRegistry,
+			GameRoomProperties roomProperties,
+			MapTemplateRegistry mapTemplateRegistry
+	) {
 		this.roomRegistry = roomRegistry;
 		this.roomProperties = roomProperties;
+		this.mapTemplateRegistry = mapTemplateRegistry;
 	}
 
 	public RoomCatalogResponseDto getCatalog() {
@@ -42,11 +47,10 @@ public class RoomCatalogService {
 			throw new ConflictException("Maximum number of rooms reached", ERROR_CODE_MAX_ROOMS_REACHED);
 		}
 
-		String mapId = normalizeMapId(request == null ? null : request.getMapId());
+		MapTemplate mapTemplate = resolveMapTemplate(request == null ? null : request.getMapId());
 		var createdRoom = roomRegistry.createRoom(
 				normalizeName(request == null ? null : request.getName()),
-				mapId,
-				resolveMapName(mapId)
+				mapTemplate
 		);
 		return toSummary(createdRoom);
 	}
@@ -67,19 +71,12 @@ public class RoomCatalogService {
 		);
 	}
 
-	private static String normalizeMapId(String requestedMapId) {
+	private MapTemplate resolveMapTemplate(String requestedMapId) {
 		if (requestedMapId == null || requestedMapId.isBlank()) {
-			return DEFAULT_MAP_ID;
+			return mapTemplateRegistry.defaultMap();
 		}
-		String mapId = requestedMapId.trim();
-		if (!DEFAULT_MAP_ID.equals(mapId)) {
-			throw new ApiException("Unknown mapId", ERROR_CODE_INVALID_MAP_ID);
-		}
-		return mapId;
-	}
-
-	private static String resolveMapName(String mapId) {
-		return DEFAULT_MAP_ID.equals(mapId) ? DEFAULT_MAP_NAME : DEFAULT_MAP_NAME;
+		return mapTemplateRegistry.get(requestedMapId)
+				.orElseThrow(() -> new ApiException("Unknown mapId", ERROR_CODE_INVALID_MAP_ID));
 	}
 
 	private static String normalizeName(String requestedName) {

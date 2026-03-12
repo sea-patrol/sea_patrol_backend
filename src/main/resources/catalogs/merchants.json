@@ -1,0 +1,25 @@
+{
+  "merchants": [
+    {
+      "id": "port-royal-trader",
+      "name": "Port Royal Trader",
+      "homePoiId": "port-royal",
+      "inventoryItemIds": [
+        "wood-log",
+        "repair-kit",
+        "cannonball-crate",
+        "rum-crate"
+      ]
+    },
+    {
+      "id": "debug-quartermaster",
+      "name": "Debug Quartermaster",
+      "homePoiId": "debug-port",
+      "inventoryItemIds": [
+        "repair-kit",
+        "cannonball-crate",
+        "fish-basket"
+      ]
+    }
+  ]
+}

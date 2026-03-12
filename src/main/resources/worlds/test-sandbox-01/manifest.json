@@ -1,0 +1,34 @@
+{
+  "id": "test-sandbox-01",
+  "name": "Test Sandbox",
+  "region": "dev",
+  "revision": 1,
+  "enabled": true,
+  "defaultMap": false,
+  "bounds": {
+    "minX": -1000.0,
+    "maxX": 1000.0,
+    "minZ": -1000.0,
+    "maxZ": 1000.0
+  },
+  "spawnRules": {
+    "playerSpawnMode": "POINTS",
+    "playerSpawnRadius": 15.0,
+    "npcSpawnEnabled": false,
+    "resourceSpawnEnabled": false
+  },
+  "files": {
+    "colliders": "colliders.json",
+    "spawnPoints": "spawn-points.json",
+    "poi": "poi.json",
+    "minimap": "minimap.json"
+  },
+  "presentation": {
+    "theme": "debug",
+    "previewImage": null
+  },
+  "defaultWind": {
+    "angle": 1.57,
+    "speed": 4.0
+  }
+}

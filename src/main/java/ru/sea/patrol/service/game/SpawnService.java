@@ -2,52 +2,70 @@ package ru.sea.patrol.service.game;
 
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
+import ru.sea.patrol.service.game.map.MapTemplate;
 
 @Service
 public class SpawnService {
 
-	static final double INITIAL_SPAWN_ORIGIN_X = 0.0;
-	static final double INITIAL_SPAWN_ORIGIN_Z = 0.0;
-	static final double INITIAL_SPAWN_ANGLE = 0.0;
-	static final double INITIAL_SPAWN_MAX_OFFSET = 30.0;
-	static final double INITIAL_SPAWN_MIN_X = -30.0;
-	static final double INITIAL_SPAWN_MAX_X = 30.0;
-	static final double INITIAL_SPAWN_MIN_Z = -30.0;
-	static final double INITIAL_SPAWN_MAX_Z = 30.0;
 	static final int INITIAL_SPAWN_MAX_ATTEMPTS = 16;
 
 	public SpawnPoint calculateInitialSpawn() {
+		return calculateInitialSpawn(MapTemplate.mvpDefault());
+	}
+
+	public SpawnPoint calculateInitialSpawn(MapTemplate mapTemplate) {
+		MapTemplate resolvedTemplate = mapTemplate == null ? MapTemplate.mvpDefault() : mapTemplate;
+		MapTemplate.SpawnPoint anchor = selectAnchor(resolvedTemplate);
+		MapTemplate.Bounds bounds = resolvedTemplate.bounds();
+		double spawnRadius = resolvedTemplate.spawnRules().playerSpawnRadius();
+
 		for (int attempt = 0; attempt < INITIAL_SPAWN_MAX_ATTEMPTS; attempt++) {
 			SpawnPoint candidate = new SpawnPoint(
-					INITIAL_SPAWN_ORIGIN_X + randomOffset(),
-					INITIAL_SPAWN_ORIGIN_Z + randomOffset(),
-					INITIAL_SPAWN_ANGLE
+					anchor.x() + randomOffset(spawnRadius),
+					anchor.z() + randomOffset(spawnRadius),
+					anchor.angle()
 			);
-			if (isWithinBounds(candidate)) {
+			if (isWithinBounds(candidate, bounds)) {
 				return candidate;
 			}
 		}
 
 		return new SpawnPoint(
-				clamp(INITIAL_SPAWN_ORIGIN_X, INITIAL_SPAWN_MIN_X, INITIAL_SPAWN_MAX_X),
-				clamp(INITIAL_SPAWN_ORIGIN_Z, INITIAL_SPAWN_MIN_Z, INITIAL_SPAWN_MAX_Z),
-				INITIAL_SPAWN_ANGLE
+				clamp(anchor.x(), bounds.minX(), bounds.maxX()),
+				clamp(anchor.z(), bounds.minZ(), bounds.maxZ()),
+				anchor.angle()
 		);
 	}
 
-	boolean isWithinBounds(SpawnPoint spawnPoint) {
-		return isWithinBounds(spawnPoint.x(), spawnPoint.z());
+	public boolean isWithinBounds(SpawnPoint spawnPoint) {
+		return isWithinBounds(spawnPoint, MapTemplate.mvpDefault().bounds());
 	}
 
-	boolean isWithinBounds(double x, double z) {
-		return x >= INITIAL_SPAWN_MIN_X
-				&& x <= INITIAL_SPAWN_MAX_X
-				&& z >= INITIAL_SPAWN_MIN_Z
-				&& z <= INITIAL_SPAWN_MAX_Z;
+	public boolean isWithinBounds(SpawnPoint spawnPoint, MapTemplate.Bounds bounds) {
+		return isWithinBounds(spawnPoint.x(), spawnPoint.z(), bounds);
 	}
 
-	private double randomOffset() {
-		return ThreadLocalRandom.current().nextDouble(-INITIAL_SPAWN_MAX_OFFSET, INITIAL_SPAWN_MAX_OFFSET);
+	public boolean isWithinBounds(double x, double z) {
+		return isWithinBounds(x, z, MapTemplate.mvpDefault().bounds());
+	}
+
+	public boolean isWithinBounds(double x, double z, MapTemplate.Bounds bounds) {
+		return x >= bounds.minX()
+				&& x <= bounds.maxX()
+				&& z >= bounds.minZ()
+				&& z <= bounds.maxZ();
+	}
+
+	private static MapTemplate.SpawnPoint selectAnchor(MapTemplate mapTemplate) {
+		var spawnPoints = mapTemplate.spawnPoints();
+		return spawnPoints.get(ThreadLocalRandom.current().nextInt(spawnPoints.size()));
+	}
+
+	private double randomOffset(double radius) {
+		if (radius <= 0.0) {
+			return 0.0;
+		}
+		return ThreadLocalRandom.current().nextDouble(-radius, radius);
 	}
 
 	private static double clamp(double value, double min, double max) {

@@ -113,7 +113,8 @@ Response `200 OK`:
 - `rooms` может быть пустым массивом;
 - список комнат берётся из `RoomRegistry`;
 - комнаты сортируются по `id`;
-- до `TASK-025` backend отдаёт временное default map metadata: `mapId=caribbean-01`, `mapName=Caribbean Sea`;
+- `mapId` и `mapName` теперь резолвятся через in-memory `MapTemplateRegistry`, который валидирует полный map package из `src/main/resources/worlds/*`;
+- в текущем production bundle зарегистрированы `caribbean-01` и `test-sandbox-01`; первая остаётся default-картой MVP, вторая доступна как dev/debug room template;
 - пустая комната удаляется из registry не сразу: сначала в ней не должно остаться активных игроков и room-bound reconnect grace, после чего backend ждёт отдельный `game.room.empty-room-idle-timeout` (MVP default: `30s`).
 
 ### 3.6 `POST /api/v1/rooms`
@@ -143,7 +144,8 @@ Response `201 Created`:
 Примечания:
 - если `name` не передан, backend генерирует следующий `sandbox-N` и display name `Sandbox N`;
 - если `name` передан, `id` строится slugified-формой имени, а `name` сохраняется как display label;
-- пока backend принимает только `mapId=caribbean-01` или пустой `mapId`;
+- backend валидирует `mapId` против своего in-memory `MapTemplateRegistry`; сейчас доступны `caribbean-01` и `test-sandbox-01`, а остальные значения возвращают `INVALID_MAP_ID`;
+- `test-sandbox-01` предназначена для dev/debug комнат и уже содержит отдельные `spawn-points`, `poi` и `defaultWind` metadata.
 - если лимит `maxRooms` достигнут, backend возвращает `409` + `MAX_ROOMS_REACHED`;
 - после успешного создания backend публикует `ROOMS_UPDATED` active lobby WebSocket-клиентам;
 - если в созданную комнату никто не зайдёт, она автоматически исчезнет из catalog после `game.room.empty-room-idle-timeout`.
@@ -181,7 +183,8 @@ Response `200 OK`:
 - после success backend переводит chat binding из `group:lobby` в `group:room:<roomId>`;
 - после room admission backend публикует `ROOMS_UPDATED` всем active lobby WebSocket-клиентам;
 - после REST `200 OK` backend отправляет по активному WS последовательность `ROOM_JOINED` -> `SPAWN_ASSIGNED` -> `INIT_GAME_STATE`;
-- initial spawn вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется сервером по MVP bounds `x/z in [-30.0, 30.0]`;
+- initial spawn вычисляется только на backend из `MapTemplate`: anchor берётся из `spawnPoints`, random offset ограничивается `spawnRules.playerSpawnRadius`, а итоговые координаты валидируются по `bounds` карты;
+- `INIT_GAME_STATE` теперь дополнительно включает `roomMeta`, собранный из room runtime и `MapTemplate` (`roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme`, `bounds`);
 - backend также держит отдельный respawn emission path с тем же payload shape и `reason=RESPAWN` для active room player.
 
 Ошибки:
@@ -378,8 +381,8 @@ Payload:
 
 Примечания:
 - spawn/respawn остаётся server-authoritative;
-- initial spawn для current runtime вычисляется backend'ом как random offset вокруг `(0, 0)`;
-- MVP bounds для initial spawn сейчас зафиксированы как `x/z in [-30.0, 30.0]`;
+- initial spawn для current runtime вычисляется backend'ом из `MapTemplate.spawnPoints` и `spawnRules.playerSpawnRadius`;
+- итоговые координаты обязаны попадать в `MapTemplate.bounds` активной комнаты;
 - `INIT_GAME_STATE` для текущего игрока должен совпадать с координатами из последнего `SPAWN_ASSIGNED`;
 - текущий runtime уже эмитит `INITIAL` в room join flow и умеет эмитить `RESPAWN` через отдельный backend respawn path; death/combat trigger остаётся задачей следующих wave'ов.
 
@@ -409,7 +412,21 @@ Payload:
 ```json
 {
   "room": "sandbox-1",
-  "wind": {"angle": 0.0, "speed": 0.0},
+  "roomMeta": {
+    "roomId": "sandbox-1",
+    "roomName": "Sandbox 1",
+    "mapId": "caribbean-01",
+    "mapName": "Caribbean Sea",
+    "mapRevision": 1,
+    "theme": "tropical",
+    "bounds": {
+      "minX": -5000.0,
+      "maxX": 5000.0,
+      "minZ": -5000.0,
+      "maxZ": 5000.0
+    }
+  },
+  "wind": {"angle": 0.0, "speed": 10.0},
   "players": [
     {
       "name": "user1",
@@ -418,7 +435,7 @@ Payload:
       "velocity": 0.0,
       "x": 12.5,
       "z": -8.0,
-      "angle": 0.0,
+      "angle": 0.5,
       "model": "model",
       "height": 4.0,
       "width": 7.0,
@@ -478,6 +495,9 @@ Payload:
 Разрешенные origins:
 - `http://localhost:5173`
 - `http://localhost:4173`
+
+
+
 
 
 

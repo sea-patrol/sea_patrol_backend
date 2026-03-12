@@ -1,0 +1,31 @@
+{
+  "quests": [
+    {
+      "id": "deliver-wood-01",
+      "name": "Deliver Wood to the Harbor",
+      "kind": "DELIVERY",
+      "objectiveType": "DELIVER_ITEM",
+      "targetId": "wood-log",
+      "targetCount": 10,
+      "rewardGold": 150
+    },
+    {
+      "id": "catch-fish-01",
+      "name": "Catch Fish for the Market",
+      "kind": "FISHING",
+      "objectiveType": "CATCH_ITEM",
+      "targetId": "fish-basket",
+      "targetCount": 5,
+      "rewardGold": 90
+    },
+    {
+      "id": "sink-pirate-01",
+      "name": "Sink the Pirate Raider",
+      "kind": "COMBAT",
+      "objectiveType": "SINK_SHIP",
+      "targetId": "pirate-raider",
+      "targetCount": 1,
+      "rewardGold": 250
+    }
+  ]
+}

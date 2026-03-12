@@ -31,10 +31,12 @@
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
-- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, `RoomCatalogService`, `RoomJoinService`, room config properties, цикл обновления, игроки.
+- `src/main/java/ru/sea/patrol/service/game` — игровые комнаты, `RoomRegistry`, `RoomCatalogService`, `RoomJoinService`, `MapTemplateRegistry`, room config properties, цикл обновления, игроки.
 - `src/main/java/ru/sea/patrol/service/session` — single-session policy и room/lobby binding для WS-пользователей.
 - `src/main/java/ru/sea/patrol/error` — единый JSON-формат ошибок для приложенческих исключений.
 - `src/main/resources/application.yaml` — конфиг приложения, JWT и room runtime defaults.
+- `src/main/resources/worlds` — in-memory map packages (`manifest`, `colliders`, `spawn-points`, `poi`, `minimap` metadata), из которых `MapTemplateRegistry` собирает доступные карты.
+- `src/main/resources/catalogs` — in-memory static catalogs (`ship-classes`, `items`, `merchants`, `quests`), которые `StaticCatalogRegistry` загружает из resource files без БД.
 - `src/main/resources/static` — собранные фронтенд-артефакты.
 - `src/test/java/ru/sea/patrol` — тесты (есть REST/WebSocket интеграционные и physics-тесты Box2D).
 
@@ -43,7 +45,7 @@
 - `POST /api/v1/auth/signup` создает пользователя в in-memory хранилище.
 - `POST /api/v1/auth/login` валидирует учетные данные и возвращает JWT + timestamps.
 - `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются не мгновенно, а после отдельного `game.room.empty-room-idle-timeout`, когда в них уже нет активных игроков и не осталось room-bound reconnect grace.
-- `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry` с room limits и минимальной map validation, после чего lobby WS-клиенты получают `ROOMS_UPDATED`.
+- `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry`, а `mapId/mapName` валидируются и резолвятся через in-memory `MapTemplateRegistry`; после successful create lobby WS-клиенты получают `ROOMS_UPDATED`.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
@@ -84,9 +86,13 @@
 - В auth DTO включена серверная валидация (`@Valid` + jakarta validation annotations) для `/api/v1/auth/signup` и `/api/v1/auth/login`.
 - Нет версионирования WebSocket-протокола; изменения формата сообщений требуют ручной синхронизации клиента/сервера.
 - `maxRooms`, `maxPlayersPerRoom` и room lifecycle уже конфигурируются через `game.room.*`, а `RoomRegistry` выступает единым source of truth для list/create/join/cleanup flows.
-- Room catalog, create room flow и room join flow пока используют временное default map metadata (`caribbean-01` / `Caribbean Sea`) до появления `MapTemplateRegistry`.
+- `MapTemplateRegistry` уже загружает полный map package из `src/main/resources/worlds/*`: `manifest`, `colliders`, `spawn-points`, `poi`, `minimap` metadata и `defaultWind` settings.
+- `StaticCatalogRegistry` теперь так же загружает `ship classes`, `item catalog`, `merchant catalog` и `quest definitions` из `src/main/resources/catalogs/*.json`; это in-memory source of truth для будущих cargo/trade/quest flows.
+- Основные игровые flow по-прежнему не зависят от `Liquibase`/`H2`: пустой стенд поднимается только на resource files + in-memory registries.
+- В текущем production bundle зарегистрированы две карты: default `caribbean-01` и dev/debug `test-sandbox-01`; внешний room REST/WS contract пока не меняется, но обе уже доступны через `mapId` validation в backend.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
-- Initial spawn для room join уже вычисляется только на backend как random offset вокруг `(0, 0)` и валидируется по MVP bounds `x/z in [-30.0, 30.0]`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
+- `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
+- Initial spawn для room join вычисляется backend'ом из `spawnPoints` + `spawnRules.playerSpawnRadius` и валидируется по `MapTemplate.bounds`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.
 
@@ -103,9 +109,9 @@
   - `GAME_RECONNECT_GRACE_PERIOD`
 
 - Windows:
-  - `.\gradlew.bat bootRun`
-  - `.\gradlew.bat test`
-  - `.\gradlew.bat build`
+  - `\.\gradlew.bat bootRun`
+  - `\.\gradlew.bat test`
+  - `\.\gradlew.bat build`
 - Linux/macOS:
   - `./gradlew bootRun`
   - `./gradlew test`
@@ -117,12 +123,3 @@
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Empty-room cleanup теперь предсказуем и bounded по `game.room.empty-room-idle-timeout`, но у комнат всё ещё нет owner/host policy или явного manual close flow.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
-
-
-
-
-
-
-
-
-

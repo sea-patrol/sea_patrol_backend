@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import reactor.core.Disposable;
 import ru.sea.patrol.service.game.GameRoom;
 import ru.sea.patrol.service.game.GameRoomProperties;
@@ -16,6 +17,7 @@ import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 import ru.sea.patrol.service.game.RoomRegistryEntry;
 import ru.sea.patrol.service.game.SpawnService;
+import ru.sea.patrol.service.game.map.MapTemplateRegistry;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
@@ -36,7 +38,7 @@ class GameServiceSpawnAssignedTest {
 				Duration.ofSeconds(30)
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
-		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties, newMapTemplateRegistry());
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		ApplicationEventPublisher eventPublisher = event -> {
 		};
@@ -79,5 +81,13 @@ class GameServiceSpawnAssignedTest {
 			sessionRegistry.shutdown();
 			roomRegistry.shutdown();
 		}
+	}
+
+	private static MapTemplateRegistry newMapTemplateRegistry() {
+		return new MapTemplateRegistry(
+				new ObjectMapper(),
+				new PathMatchingResourcePatternResolver(),
+				"classpath*:worlds/*/manifest.json"
+		);
 	}
 }

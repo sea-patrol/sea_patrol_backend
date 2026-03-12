@@ -14,11 +14,13 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitResult;
+import ru.sea.patrol.service.game.map.MapTemplate;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.InitGameStateMessage;
 import ru.sea.patrol.ws.protocol.dto.MessageOutput;
 import ru.sea.patrol.ws.protocol.dto.PlayerInfo;
 import ru.sea.patrol.ws.protocol.dto.PlayerUpdateInfo;
+import ru.sea.patrol.ws.protocol.dto.RoomStateInfo;
 import ru.sea.patrol.ws.protocol.dto.UpdateGameStateMessage;
 import ru.sea.patrol.ws.protocol.dto.WindInfo;
 
@@ -27,6 +29,13 @@ public class GameRoom {
 
 	@Getter
 	private final String name;
+
+	@Getter
+	private final String roomName;
+
+	@Getter
+	private final MapTemplate mapTemplate;
+
 	private final Map<String, Player> players = new ConcurrentHashMap<>();
 
 	@Getter
@@ -48,11 +57,17 @@ public class GameRoom {
 	@Getter
 	private final long updatePeriodMillis;
 
-	public GameRoom(String name, long updatePeriodMillis) {
+	public GameRoom(String roomId, long updatePeriodMillis) {
+		this(roomId, roomId, MapTemplate.mvpDefault(), updatePeriodMillis);
+	}
+
+	public GameRoom(String roomId, String roomName, MapTemplate mapTemplate, long updatePeriodMillis) {
 		if (updatePeriodMillis <= 0) {
 			throw new IllegalArgumentException("updatePeriodMillis must be greater than zero");
 		}
-		this.name = name;
+		this.name = roomId;
+		this.roomName = roomName == null || roomName.isBlank() ? roomId : roomName.trim();
+		this.mapTemplate = mapTemplate == null ? MapTemplate.mvpDefault() : mapTemplate;
 		this.updatePeriodMillis = updatePeriodMillis;
 		this.sink = Sinks.many().multicast().directBestEffort();
 	}
@@ -128,7 +143,7 @@ public class GameRoom {
 		}
 
 		world = new World(new Vector2(0, 0), true);
-		wind = new Wind();
+		wind = new Wind((float) mapTemplate.defaultWind().angle(), (float) mapTemplate.defaultWind().speed());
 		for (var player : players.values()) {
 			player.createShipInstanceInGameWorld(world);
 		}
@@ -216,7 +231,8 @@ public class GameRoom {
 				MessageType.INIT_GAME_STATE,
 				new InitGameStateMessage(
 						name,
-						new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+						RoomStateInfo.from(name, roomName, mapTemplate),
+						toWindInfo(),
 						players.values().stream()
 								.map(p -> new PlayerInfo(
 										p.getName(),
@@ -244,7 +260,7 @@ public class GameRoom {
 				MessageType.UPDATE_GAME_STATE,
 				new UpdateGameStateMessage(
 					delta,
-					new WindInfo(wind.getDirection().angleRad(), wind.getSpeed()),
+					toWindInfo(),
 					players.values().stream()
 							.map(player -> new PlayerUpdateInfo(
 									player.getName(),
@@ -289,5 +305,9 @@ public class GameRoom {
 		var leaveMessage = new MessageOutput(MessageType.PLAYER_LEAVE, player.getName());
 		sink.tryEmitNext(leaveMessage);
 		log.info("Player {} left the room game {}", player.getName(), name);
+	}
+
+	private WindInfo toWindInfo() {
+		return new WindInfo(wind.getDirection().angleRad(), wind.getSpeed());
 	}
 }

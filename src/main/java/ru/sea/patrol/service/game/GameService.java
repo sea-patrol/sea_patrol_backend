@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.sea.patrol.service.game.map.MapTemplate;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.ws.protocol.MessageType;
 import ru.sea.patrol.ws.protocol.dto.MessageInput;
@@ -179,7 +180,12 @@ public class GameService {
 
 	private SpawnAssignedResponseDto assignSpawn(String playerName, String roomId, SpawnReason reason) {
 		Player player = requireExistingPlayer(playerName);
-		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn();
+		GameRoom room = roomRegistry.findRoom(roomId);
+		if (room == null) {
+			throw new IllegalStateException("Room not found while assigning spawn: " + roomId);
+		}
+		MapTemplate mapTemplate = room.getMapTemplate();
+		SpawnPoint spawnPoint = spawnService.calculateInitialSpawn(mapTemplate);
 		applySpawn(player, spawnPoint);
 		return new SpawnAssignedResponseDto(roomId, reason, spawnPoint.x(), spawnPoint.z(), spawnPoint.angle());
 	}

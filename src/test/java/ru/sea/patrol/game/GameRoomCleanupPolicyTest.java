@@ -6,12 +6,14 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import ru.sea.patrol.service.game.GameRoomProperties;
 import ru.sea.patrol.service.game.GameService;
 import ru.sea.patrol.service.game.RoomCatalogService;
 import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomRegistry;
 import ru.sea.patrol.service.game.RoomRegistryEntry;
+import ru.sea.patrol.service.game.map.MapTemplateRegistry;
 import ru.sea.patrol.service.session.GameSessionRegistry;
 import ru.sea.patrol.service.session.SessionGraceExpiredEvent;
 import tools.jackson.databind.ObjectMapper;
@@ -22,7 +24,7 @@ class GameRoomCleanupPolicyTest {
 	void cleanupPlayer_keepsEmptyRoomUntilIdleTimeout_withoutReconnectGrace() throws Exception {
 		GameRoomProperties properties = properties(Duration.ofSeconds(15), Duration.ofMillis(120));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
-		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties, newMapTemplateRegistry());
 		ApplicationEventPublisher eventPublisher = event -> {
 		};
 		GameSessionRegistry sessionRegistry = new GameSessionRegistry(properties, roomRegistry, eventPublisher);
@@ -49,7 +51,7 @@ class GameRoomCleanupPolicyTest {
 	void disconnectPlayer_keepsRoomThroughGrace_andRemovesOnlyAfterIdleTimeout() throws Exception {
 		GameRoomProperties properties = properties(Duration.ofMillis(120), Duration.ofMillis(120));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
-		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties);
+		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties, newMapTemplateRegistry());
 		RoomCatalogWsService roomCatalogWsService = new RoomCatalogWsService(roomCatalogService);
 		AtomicReference<GameService> gameServiceRef = new AtomicReference<>();
 		ApplicationEventPublisher eventPublisher = event -> {
@@ -87,6 +89,14 @@ class GameRoomCleanupPolicyTest {
 			sessionRegistry.shutdown();
 			roomRegistry.shutdown();
 		}
+	}
+
+	private static MapTemplateRegistry newMapTemplateRegistry() {
+		return new MapTemplateRegistry(
+				new ObjectMapper(),
+				new PathMatchingResourcePatternResolver(),
+				"classpath*:worlds/*/manifest.json"
+		);
 	}
 
 	private static GameRoomProperties properties(Duration reconnectGracePeriod, Duration emptyRoomIdleTimeout) {

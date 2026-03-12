@@ -1,0 +1,28 @@
+{
+  "shipClasses": [
+    {
+      "id": "starter-sloop",
+      "name": "Starter Sloop",
+      "hullModel": "model",
+      "maxHealth": 500,
+      "maxCargoSlots": 12,
+      "maxSpeed": 8.5
+    },
+    {
+      "id": "merchant-brig",
+      "name": "Merchant Brig",
+      "hullModel": "merchant-brig",
+      "maxHealth": 720,
+      "maxCargoSlots": 24,
+      "maxSpeed": 7.0
+    },
+    {
+      "id": "patrol-brigantine",
+      "name": "Patrol Brigantine",
+      "hullModel": "patrol-brigantine",
+      "maxHealth": 680,
+      "maxCargoSlots": 16,
+      "maxSpeed": 8.0
+    }
+  ]
+}

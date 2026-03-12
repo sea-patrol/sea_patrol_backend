@@ -1,0 +1,11 @@
+{
+  "pointsOfInterest": [
+    {
+      "id": "broken-port",
+      "name": "Broken Port",
+      "kind": "PORT",
+      "x": 0.0,
+      "z": 0.0
+    }
+  ]
+}

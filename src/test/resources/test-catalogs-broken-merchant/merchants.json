@@ -1,0 +1,13 @@
+{
+  "merchants": [
+    {
+      "id": "broken-merchant",
+      "name": "Broken Merchant",
+      "homePoiId": "port-royal",
+      "inventoryItemIds": [
+        "wood-log",
+        "missing-item"
+      ]
+    }
+  ]
+}
