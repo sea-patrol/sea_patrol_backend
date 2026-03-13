@@ -115,6 +115,18 @@ public class GameSessionRegistry {
 		return true;
 	}
 
+	public synchronized LobbyRebindResult bindToLobbyFromRoom(String username, String roomId) {
+		var activeEntry = activeSessions.get(username);
+		if (activeEntry == null || activeEntry.binding().isLobby()) {
+			return LobbyRebindResult.ROOM_SESSION_REQUIRED;
+		}
+		if (!roomId.equals(activeEntry.binding().roomId())) {
+			return LobbyRebindResult.ROOM_SESSION_MISMATCH;
+		}
+		activeSessions.put(username, activeEntry.withBinding(SessionBinding.lobby()));
+		return LobbyRebindResult.SUCCESS;
+	}
+
 	public synchronized boolean hasReconnectGraceInRoom(String roomId) {
 		return roomId != null && reconnectGraceSessions.values().stream()
 				.anyMatch(entry -> roomId.equals(entry.binding().roomId()));
@@ -169,6 +181,12 @@ public class GameSessionRegistry {
 		NEW_SESSION,
 		RECONNECTED_SESSION,
 		REJECTED_DUPLICATE
+	}
+
+	public enum LobbyRebindResult {
+		SUCCESS,
+		ROOM_SESSION_REQUIRED,
+		ROOM_SESSION_MISMATCH
 	}
 
 	private record SessionBinding(String roomId) {

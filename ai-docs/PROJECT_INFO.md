@@ -27,7 +27,7 @@
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
-- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`).
+- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`, `POST /api/v1/rooms/{roomId}/leave`).
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
@@ -47,11 +47,12 @@
 - `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются не мгновенно, а после отдельного `game.room.empty-room-idle-timeout`, когда в них уже нет активных игроков и не осталось room-bound reconnect grace.
 - `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry`, а `mapId/mapName` валидируются и резолвятся через in-memory `MapTemplateRegistry`; после successful create lobby WS-клиенты получают `ROOMS_UPDATED`.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
+- `POST /api/v1/rooms/{roomId}/leave` делает обратный room-menu flow: удаляет игрока из runtime комнаты, переводит ту же активную WS-сессию обратно в `lobby`, переносит chat scope из `group:room:<roomId>` в `group:lobby`, отправляет `ROOMS_SNAPSHOT` и публикует `ROOMS_UPDATED`.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
-- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms` и `POST /api/v1/rooms/{roomId}/join`, требуют JWT в `Authorization: Bearer <token>`.
+- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join` и `POST /api/v1/rooms/{roomId}/leave`, требуют JWT в `Authorization: Bearer <token>`.
 - Для WebSocket handshake (`GET /ws/...`) токен читается из query-параметра `token`.
 
 ### 4.3 WebSocket / Игра
@@ -69,6 +70,11 @@
   - подготавливает игрока к join, переключает session binding на `roomId` и переносит chat membership из `group:lobby` в `group:room:<roomId>`;
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
+- Выход из игровой комнаты выполняется через `POST /api/v1/rooms/{roomId}/leave`:
+  - backend проверяет существование комнаты и наличие активной room WS-session именно на тот же `roomId`;
+  - убирает игрока из runtime комнаты без полного logout или разрыва всей auth/WS session;
+  - переводит session binding обратно в `lobby` и переносит chat membership из `group:room:<roomId>` в `group:lobby`;
+  - отправляет по той же WS-сессии `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot после leave и затем публикует `ROOMS_UPDATED` для lobby клиентов.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
 - Room wind rotation тоже конфигурируется на уровне backend через `game.room.wind-rotation-speed` (MVP default: `0.17453292 rad/s`, то есть примерно `10°/s`).
 - После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`) удерживает room-bound runtime state для controlled resume.
@@ -130,4 +136,5 @@
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Empty-room cleanup теперь предсказуем и bounded по `game.room.empty-room-idle-timeout`, но у комнат всё ещё нет owner/host policy или явного manual close flow.
+- Manual room close/leave теперь есть только на уровне player exit-to-lobby (`POST /api/v1/rooms/{roomId}/leave`); owner/host semantics и удаление комнаты по инициативе владельца всё ещё не реализованы.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.

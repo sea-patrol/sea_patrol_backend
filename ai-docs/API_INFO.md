@@ -192,15 +192,15 @@ Response `200 OK`:
 - `409` -> `{ "errors": [{ "code": "ROOM_FULL", "message": "Room is full" }] }`
 - `409` -> `{ "errors": [{ "code": "LOBBY_SESSION_REQUIRED", "message": "Active lobby WebSocket session is required" }] }`
 
-### 3.8 `POST /api/v1/rooms/{roomId}/leave` (agreed next contract, not implemented yet)
-`TASK-035A` фиксирует этот endpoint как следующий канонический room-menu flow, но на текущий момент backend runtime его ещё не реализует.
+### 3.8 `POST /api/v1/rooms/{roomId}/leave`
+Подтверждает выход игрока из комнаты обратно в lobby и переводит текущую активную WS-сессию из room binding в lobby binding.
 
 Request body:
 ```json
 {}
 ```
 
-Планируемый response `200 OK`:
+Response `200 OK`:
 ```json
 {
   "roomId": "sandbox-1",
@@ -209,14 +209,20 @@ Request body:
 }
 ```
 
-Планируемые ошибки:
+Примечания:
+- leave невозможен без активной room WebSocket session для того же `username`;
+- `roomId` в path должен совпадать с текущим active room binding пользователя;
+- после success backend удаляет игрока из runtime комнаты, переводит chat binding из `group:room:<roomId>` в `group:lobby`, отправляет этой же WS-сессии `ROOMS_SNAPSHOT` и затем публикует `ROOMS_UPDATED`;
+- отдельный `ROOM_LEFT` message type в MVP по-прежнему не используется.
+
+Ошибки:
 - `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
 - `409` -> `{ "errors": [{ "code": "ROOM_SESSION_REQUIRED", "message": "Active room WebSocket session is required" }] }`
 - `409` -> `{ "errors": [{ "code": "ROOM_SESSION_MISMATCH", "message": "Player is not bound to this room" }] }`
 
-Планируемая WS-семантика:
+WS-семантика:
 - отдельный `ROOM_LEFT` message type в MVP не требуется;
-- после успешного REST leave backend должен rebinding'ить ту же сессию в `lobby` и отправлять `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot.
+- после успешного REST leave backend rebinding'ит ту же сессию в `lobby` и отправляет `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot.
 
 ## 4. WebSocket API (`/ws/game`)
 ### 4.1 Транспортный формат и session policy

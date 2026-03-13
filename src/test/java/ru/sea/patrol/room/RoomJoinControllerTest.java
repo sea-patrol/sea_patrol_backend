@@ -176,6 +176,108 @@ class RoomJoinControllerTest {
 	}
 
 	@Test
+	void leaveRoom_withoutActiveRoomWsSession_returns409() throws Exception {
+		String token = loginAndGetToken("user1", "123456");
+		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox Leave", "caribbean-01", "Caribbean Sea");
+
+		try (ActiveWsConnection connection = openSession(token)) {
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/leave", room.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isEqualTo(409)
+					.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+					.expectBody()
+					.jsonPath("$.errors[0].code").isEqualTo("ROOM_SESSION_REQUIRED")
+					.jsonPath("$.errors[0].message").isEqualTo("Active room WebSocket session is required");
+		}
+	}
+
+	@Test
+	void leaveRoom_whenBoundToDifferentRoom_returns409() throws Exception {
+		String token = loginAndGetToken("user1", "123456");
+		RoomRegistryEntry joinedRoom = roomRegistry.createRoom("Sandbox A", "caribbean-01", "Caribbean Sea");
+		RoomRegistryEntry otherRoom = roomRegistry.createRoom("Sandbox B", "caribbean-01", "Caribbean Sea");
+
+		try (ActiveWsConnection connection = openSession(token)) {
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/join", joinedRoom.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isOk();
+
+			awaitMessageOfType(connection, MessageType.ROOM_JOINED, Duration.ofSeconds(3));
+			awaitMessageOfType(connection, MessageType.SPAWN_ASSIGNED, Duration.ofSeconds(3));
+			awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/leave", otherRoom.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isEqualTo(409)
+					.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+					.expectBody()
+					.jsonPath("$.errors[0].code").isEqualTo("ROOM_SESSION_MISMATCH")
+					.jsonPath("$.errors[0].message").isEqualTo("Player is not bound to this room");
+		}
+	}
+
+	@Test
+	void leaveRoom_success_returns200_andWsReceivesLobbySnapshot() throws Exception {
+		String token = loginAndGetToken("user1", "123456");
+		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox Leave", "caribbean-01", "Caribbean Sea");
+
+		try (ActiveWsConnection connection = openSession(token)) {
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/join", room.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isOk();
+
+			awaitMessageOfType(connection, MessageType.ROOM_JOINED, Duration.ofSeconds(3));
+			awaitMessageOfType(connection, MessageType.SPAWN_ASSIGNED, Duration.ofSeconds(3));
+			awaitMessageOfType(connection, MessageType.INIT_GAME_STATE, Duration.ofSeconds(3));
+
+			webTestClient
+					.post()
+					.uri("/api/v1/rooms/{roomId}/leave", room.id())
+					.headers(headers -> headers.setBearerAuth(token))
+					.contentType(MediaType.APPLICATION_JSON)
+					.bodyValue("{}")
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+					.expectBody()
+					.jsonPath("$.roomId").isEqualTo(room.id())
+					.jsonPath("$.status").isEqualTo("LEFT")
+					.jsonPath("$.nextState").isEqualTo("LOBBY");
+
+			JsonNode snapshotMessage = awaitMessageOfType(connection, MessageType.ROOMS_SNAPSHOT, Duration.ofSeconds(3));
+			assertThat(snapshotMessage.path("payload").path("rooms")).hasSize(1);
+			assertThat(snapshotMessage.path("payload").path("rooms").get(0).path("id").asText()).isEqualTo(room.id());
+			assertThat(snapshotMessage.path("payload").path("rooms").get(0).path("currentPlayers").asInt()).isEqualTo(0);
+			assertThat(snapshotMessage.path("payload").path("rooms").get(0).path("status").asText()).isEqualTo("OPEN");
+
+			JsonNode updatedMessage = awaitMessageOfType(connection, MessageType.ROOMS_UPDATED, Duration.ofSeconds(3));
+			assertThat(updatedMessage.path("payload").path("rooms")).hasSize(1);
+			assertThat(updatedMessage.path("payload").path("rooms").get(0).path("id").asText()).isEqualTo(room.id());
+			assertThat(updatedMessage.path("payload").path("rooms").get(0).path("currentPlayers").asInt()).isEqualTo(0);
+		}
+	}
+
+	@Test
 	void reconnectWithinGrace_resumesSameRoomWithoutNewSpawn() throws Exception {
 		String token = loginAndGetToken("user1", "123456");
 		RoomRegistryEntry room = roomRegistry.createRoom("Sandbox Resume", "caribbean-01", "Caribbean Sea");

@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import ru.sea.patrol.room.api.dto.RoomCatalogResponseDto;
 import ru.sea.patrol.room.api.dto.RoomCreateRequestDto;
+import ru.sea.patrol.room.api.dto.RoomLeaveResponseDto;
 import ru.sea.patrol.room.api.dto.RoomSummaryDto;
 import ru.sea.patrol.service.game.RoomCatalogService;
 import ru.sea.patrol.service.game.RoomCatalogWsService;
 import ru.sea.patrol.service.game.RoomJoinService;
+import ru.sea.patrol.service.game.RoomLeaveService;
 import ru.sea.patrol.ws.protocol.dto.RoomJoinResponseDto;
 
 @RestController
@@ -28,6 +30,7 @@ public class RoomController {
 	private final RoomCatalogService roomCatalogService;
 	private final RoomCatalogWsService roomCatalogWsService;
 	private final RoomJoinService roomJoinService;
+	private final RoomLeaveService roomLeaveService;
 
 	@GetMapping
 	public Mono<RoomCatalogResponseDto> listRooms() {
@@ -50,5 +53,13 @@ public class RoomController {
 				.map(SecurityContext::getAuthentication)
 				.map(authentication -> authentication.getName())
 				.map(username -> roomJoinService.joinRoom(username, roomId));
+	}
+
+	@PostMapping("/{roomId}/leave")
+	public Mono<RoomLeaveResponseDto> leaveRoom(@PathVariable String roomId) {
+		return ReactiveSecurityContextHolder.getContext()
+				.map(SecurityContext::getAuthentication)
+				.map(authentication -> authentication.getName())
+				.map(username -> roomLeaveService.leaveRoom(username, roomId));
 	}
 }

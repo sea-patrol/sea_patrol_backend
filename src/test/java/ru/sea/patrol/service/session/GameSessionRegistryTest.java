@@ -140,6 +140,46 @@ class GameSessionRegistryTest {
 	}
 
 	@Test
+	void bindToLobbyFromRoom_rebindsActiveRoomSessionBackToLobby() {
+		GameRoomProperties properties = newProperties(Duration.ofSeconds(15), Duration.ofSeconds(30));
+		RoomRegistry roomRegistry = new RoomRegistry(properties);
+		GameSessionRegistry registry = newRegistry(properties, roomRegistry);
+		try {
+			registry.claimSession("alice", "s1");
+			assertThat(registry.bindToRoom("alice", "sandbox-1")).isTrue();
+
+			assertThat(registry.bindToLobbyFromRoom("alice", "sandbox-1"))
+					.isEqualTo(GameSessionRegistry.LobbyRebindResult.SUCCESS);
+			assertThat(registry.hasActiveLobbySession("alice")).isTrue();
+			assertThat(registry.activeRoomId("alice")).isNull();
+		} finally {
+			registry.shutdown();
+			roomRegistry.shutdown();
+		}
+	}
+
+	@Test
+	void bindToLobbyFromRoom_rejectsLobbyOrDifferentRoomBinding() {
+		GameRoomProperties properties = newProperties(Duration.ofSeconds(15), Duration.ofSeconds(30));
+		RoomRegistry roomRegistry = new RoomRegistry(properties);
+		GameSessionRegistry registry = newRegistry(properties, roomRegistry);
+		try {
+			registry.claimSession("alice", "s1");
+
+			assertThat(registry.bindToLobbyFromRoom("alice", "sandbox-1"))
+					.isEqualTo(GameSessionRegistry.LobbyRebindResult.ROOM_SESSION_REQUIRED);
+
+			assertThat(registry.bindToRoom("alice", "sandbox-1")).isTrue();
+			assertThat(registry.bindToLobbyFromRoom("alice", "sandbox-2"))
+					.isEqualTo(GameSessionRegistry.LobbyRebindResult.ROOM_SESSION_MISMATCH);
+			assertThat(registry.activeRoomId("alice")).isEqualTo("sandbox-1");
+		} finally {
+			registry.shutdown();
+			roomRegistry.shutdown();
+		}
+	}
+
+	@Test
 	void reconnectFromGrace_keepsRetainedEmptyRoomUntilIdleTimeout() throws Exception {
 		GameRoomProperties properties = newProperties(Duration.ofSeconds(15), Duration.ofMillis(120));
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
