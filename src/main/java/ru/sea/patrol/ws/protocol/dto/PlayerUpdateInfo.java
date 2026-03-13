@@ -4,6 +4,7 @@ public record PlayerUpdateInfo(
         String name,
         int health,
         float velocity,
+        int sailLevel,
         float x,
         float z,
         float angle) {

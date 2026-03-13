@@ -81,7 +81,13 @@ public class RoomRegistry {
 				roomName,
 				resolvedMapTemplate.id(),
 				resolvedMapTemplate.name(),
-				new GameRoom(roomId, roomName, resolvedMapTemplate, roomProperties.updatePeriod().toMillis())
+				new GameRoom(
+						roomId,
+						roomName,
+						resolvedMapTemplate,
+						roomProperties.updatePeriod().toMillis(),
+						roomProperties.windRotationSpeed()
+				)
 		);
 		rooms.put(roomId, entry);
 		scheduleEmptyRoomCleanupIfNeeded(roomId);
@@ -183,7 +189,13 @@ public class RoomRegistry {
 				roomId,
 				defaultMapTemplate.id(),
 				defaultMapTemplate.name(),
-				new GameRoom(roomId, roomId, defaultMapTemplate, roomProperties.updatePeriod().toMillis())
+				new GameRoom(
+						roomId,
+						roomId,
+						defaultMapTemplate,
+						roomProperties.updatePeriod().toMillis(),
+						roomProperties.windRotationSpeed()
+				)
 		);
 	}
 

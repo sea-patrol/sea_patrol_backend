@@ -72,6 +72,13 @@ public class ChatService {
 		joinToGroup(username, ROOM_CHAT_PREFIX + roomId);
 	}
 
+	public void moveUserToLobby(String username, String roomId) {
+		if (roomId != null && !roomId.isBlank()) {
+			leaveFromGroup(username, ROOM_CHAT_PREFIX + roomId);
+		}
+		joinToGroup(username, LOBBY_CHAT_GROUP);
+	}
+
 	public Mono<Void> handle(String username, MessageInput msg) {
 		switch (msg.getType()) {
 			case MessageType.CHAT_MESSAGE:

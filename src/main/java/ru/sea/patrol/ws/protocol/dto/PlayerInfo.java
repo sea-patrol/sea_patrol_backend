@@ -5,6 +5,7 @@ public record PlayerInfo(
         int health,
         int maxHealth,
         float velocity,
+        int sailLevel,
         float x,
         float z,
         float angle,

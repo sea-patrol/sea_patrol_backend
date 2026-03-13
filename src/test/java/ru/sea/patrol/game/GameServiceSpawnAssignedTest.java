@@ -35,7 +35,8 @@ class GameServiceSpawnAssignedTest {
 				100,
 				Duration.ofMillis(100),
 				Duration.ofSeconds(15),
-				Duration.ofSeconds(30)
+				Duration.ofSeconds(30),
+				0.17453292
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(properties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, properties, newMapTemplateRegistry());

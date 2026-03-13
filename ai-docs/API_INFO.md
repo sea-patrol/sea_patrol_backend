@@ -192,6 +192,38 @@ Response `200 OK`:
 - `409` -> `{ "errors": [{ "code": "ROOM_FULL", "message": "Room is full" }] }`
 - `409` -> `{ "errors": [{ "code": "LOBBY_SESSION_REQUIRED", "message": "Active lobby WebSocket session is required" }] }`
 
+### 3.8 `POST /api/v1/rooms/{roomId}/leave`
+Подтверждает выход игрока из комнаты обратно в lobby и переводит текущую активную WS-сессию из room binding в lobby binding.
+
+Request body:
+```json
+{}
+```
+
+Response `200 OK`:
+```json
+{
+  "roomId": "sandbox-1",
+  "status": "LEFT",
+  "nextState": "LOBBY"
+}
+```
+
+Примечания:
+- leave невозможен без активной room WebSocket session для того же `username`;
+- `roomId` в path должен совпадать с текущим active room binding пользователя;
+- после success backend удаляет игрока из runtime комнаты, переводит chat binding из `group:room:<roomId>` в `group:lobby`, отправляет этой же WS-сессии `ROOMS_SNAPSHOT` и затем публикует `ROOMS_UPDATED`;
+- отдельный `ROOM_LEFT` message type в MVP по-прежнему не используется.
+
+Ошибки:
+- `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
+- `409` -> `{ "errors": [{ "code": "ROOM_SESSION_REQUIRED", "message": "Active room WebSocket session is required" }] }`
+- `409` -> `{ "errors": [{ "code": "ROOM_SESSION_MISMATCH", "message": "Player is not bound to this room" }] }`
+
+WS-семантика:
+- отдельный `ROOM_LEFT` message type в MVP не требуется;
+- после успешного REST leave backend rebinding'ит ту же сессию в `lobby` и отправляет `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot.
+
 ## 4. WebSocket API (`/ws/game`)
 ### 4.1 Транспортный формат и session policy
 ### Session policy
@@ -298,6 +330,12 @@ Payload:
   "down": false
 }
 ```
+
+Текущее состояние после `TASK-033B`:
+- `left/right` остаются командами поворота;
+- `up/down` на backend уже трактуются как rising-edge команды изменения `sailLevel` на `+1/-1`, а не как прямой throttle/brake;
+- `sailLevel` является server-authoritative состоянием в диапазоне `0..3`;
+- стартовое значение для нового room player: `3`.
 
 ## 4.4 Сообщения сервер -> клиент
 ### `CHAT_MESSAGE`
@@ -433,6 +471,7 @@ Payload:
       "health": 500,
       "maxHealth": 500,
       "velocity": 0.0,
+      "sailLevel": 3,
       "x": 12.5,
       "z": -8.0,
       "angle": 0.5,
@@ -445,17 +484,29 @@ Payload:
 }
 ```
 
+Семантика `wind`:
+- `angle` приходит в радианах в плоскости `XZ`;
+- `0` означает направление вдоль `+X`, `PI / 2` — вдоль `+Z`;
+- backend runtime строит направление ветра как `Vector2(cos(angle), sin(angle))`, поэтому frontend и тесты должны интерпретировать угол именно так;
+- `speed` — неотрицательная скалярная сила ветра;
+- `INIT_GAME_STATE.wind` — initial authoritative snapshot room wind.
+
+Состояние после `TASK-033B`:
+- `INIT_GAME_STATE.players[*].sailLevel` уже приходит из backend runtime;
+- поле означает текущий server-authoritative уровень парусов игрока в диапазоне `0..3`.
+
 ### `UPDATE_GAME_STATE`
 Payload:
 ```json
 {
   "delta": 0.1,
-  "wind": {"angle": 0.0, "speed": 0.0},
+  "wind": {"angle": 0.0, "speed": 10.0},
   "players": [
     {
       "name": "user1",
       "health": 500,
       "velocity": 0.0,
+      "sailLevel": 3,
       "x": 12.5,
       "z": -8.0,
       "angle": 0.0
@@ -464,7 +515,28 @@ Payload:
 }
 ```
 
+Семантика `UPDATE_GAME_STATE.wind`:
+- payload shape совпадает с `INIT_GAME_STATE.wind`;
+- это полный текущий authoritative snapshot ветра комнаты, а не delta-патч;
+- backend теперь вращает `wind.angle` по часовой стрелке с фиксированной room-wide скоростью `game.room.wind-rotation-speed` (MVP default: `0.17453292 rad/s`, то есть примерно `10°/s`);
+- clockwise в канонической системе `XZ` означает уменьшение угла во времени с нормализацией обратно в диапазон `[0, 2π)`.
+
+Состояние после `TASK-033B`:
+- `players[*].sailLevel` уже приходит и в `UPDATE_GAME_STATE`;
+- текущий backend runtime включает `sailLevel` в player state этого сообщения как часть authoritative snapshot игрока.
+
 Примечание (backpressure): сервер может пропускать часть сообщений `UPDATE_GAME_STATE` для медленных клиентов (best-effort). Клиент должен быть готов не получать каждое обновление и просто применять последнее полученное состояние.
+
+Текущее состояние по `TASK-035`:
+- authoritative `wind` уже хранится на уровне `GameRoom`, а не вычисляется отдельно на клиентах;
+- один и тот же `wind` snapshot рассылается всем игрокам конкретной комнаты через `INIT_GAME_STATE` и `UPDATE_GAME_STATE`;
+- runtime policy уже больше не случайная: `Wind.update(delta)` вращает направление предсказуемо и одинаково для всех игроков комнаты.
+
+Текущее состояние по `TASK-033`:
+- backend ship movement уже использует тот же room-level `wind` runtime state;
+- `PLAYER_INPUT.up/down` больше не дают прямую тягу, а меняют `sailLevel` по rising-edge;
+- итоговая тяга зависит от силы ветра, относительного угла между курсом корабля и направлением ветра и текущего `sailLevel`;
+- в текущей простой модели `beam reach` даёт больше drive, чем чистый `tailwind`, а `headwind` заметно ослабляет ускорение, но не переводит модель в сложную аэродинамику.
 
 ## 5. Формат ошибок
 Для приложенческих ошибок (через глобальный handler) ответ:

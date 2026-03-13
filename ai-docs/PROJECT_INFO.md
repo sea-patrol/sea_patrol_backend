@@ -27,7 +27,7 @@
 - `src/main/java/ru/sea/patrol/SeaPatrolApplication.java` — точка входа.
 - `src/main/java/ru/sea/patrol/config` — безопасность и WebSocket-маршрутизация.
 - `src/main/java/ru/sea/patrol/auth` — REST auth (`/api/v1/auth/*`) + JWT/security компоненты.
-- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`).
+- `src/main/java/ru/sea/patrol/room` — REST room endpoints (`GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join`, `POST /api/v1/rooms/{roomId}/leave`).
 - `src/main/java/ru/sea/patrol/user` — домен пользователей + in-memory репозиторий.
 - `src/main/java/ru/sea/patrol/ws` — WebSocket handler `/ws/game` + протокол сообщений (MessageType + DTO).
 - `src/main/java/ru/sea/patrol/service/chat` — чат-группы и сообщения.
@@ -47,11 +47,12 @@
 - `GET /api/v1/rooms` возвращает текущий room catalog для lobby UI на основе `RoomRegistry`; пустые комнаты удаляются не мгновенно, а после отдельного `game.room.empty-room-idle-timeout`, когда в них уже нет активных игроков и не осталось room-bound reconnect grace.
 - `POST /api/v1/rooms` создаёт новую комнату в `RoomRegistry`, а `mapId/mapName` валидируются и резолвятся через in-memory `MapTemplateRegistry`; после successful create lobby WS-клиенты получают `ROOMS_UPDATED`.
 - `POST /api/v1/rooms/{roomId}/join` валидирует room admission и переводит текущую активную WS-сессию пользователя из lobby binding в room binding.
+- `POST /api/v1/rooms/{roomId}/leave` делает обратный room-menu flow: удаляет игрока из runtime комнаты, переводит ту же активную WS-сессию обратно в `lobby`, переносит chat scope из `group:room:<roomId>` в `group:lobby`, отправляет `ROOMS_SNAPSHOT` и публикует `ROOMS_UPDATED`.
 - Если у пользователя уже есть активная игровая WebSocket-сессия, повторный `login` отклоняется `401` с `SEAPATROL_DUPLICATE_SESSION`.
 
 ### 4.2 Безопасность
 - Публичные маршруты: `/`, `/game`, статика, `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`.
-- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms` и `POST /api/v1/rooms/{roomId}/join`, требуют JWT в `Authorization: Bearer <token>`.
+- Остальные HTTP-маршруты, включая `GET /api/v1/rooms`, `POST /api/v1/rooms`, `POST /api/v1/rooms/{roomId}/join` и `POST /api/v1/rooms/{roomId}/leave`, требуют JWT в `Authorization: Bearer <token>`.
 - Для WebSocket handshake (`GET /ws/...`) токен читается из query-параметра `token`.
 
 ### 4.3 WebSocket / Игра
@@ -69,7 +70,13 @@
   - подготавливает игрока к join, переключает session binding на `roomId` и переносит chat membership из `group:lobby` в `group:room:<roomId>`;
   - публикует `ROOMS_UPDATED` всем оставшимся lobby WS-клиентам как полный snapshot room catalog;
   - после успешного REST response по открытому WS отправляет `ROOM_JOINED`, затем `SPAWN_ASSIGNED`, затем `INIT_GAME_STATE` и дальнейшие room updates.
+- Выход из игровой комнаты выполняется через `POST /api/v1/rooms/{roomId}/leave`:
+  - backend проверяет существование комнаты и наличие активной room WS-session именно на тот же `roomId`;
+  - убирает игрока из runtime комнаты без полного logout или разрыва всей auth/WS session;
+  - переводит session binding обратно в `lobby` и переносит chat membership из `group:room:<roomId>` в `group:lobby`;
+  - отправляет по той же WS-сессии `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot после leave и затем публикует `ROOMS_UPDATED` для lobby клиентов.
 - Частота обновлений комнаты задаётся через `game.room.update-period` (MVP default: `100ms`).
+- Room wind rotation тоже конфигурируется на уровне backend через `game.room.wind-rotation-speed` (MVP default: `0.17453292 rad/s`, то есть примерно `10°/s`).
 - После disconnect active session ownership снимается сразу: username перестаёт считаться active WS-session owner и может снова пройти login, а reconnect grace на `game.room.reconnect-grace-period` (MVP default: `15s`) удерживает room-bound runtime state для controlled resume.
 - Если пользователь отключился из комнаты и после этого она осталась без других активных игроков, backend удерживает её в `RoomRegistry` до окончания reconnect grace; `currentPlayers` в lobby catalog не уменьшается мгновенно, потому что disconnected player остаётся частью retained room state до timeout.
 - Reconnect в течение grace восстанавливает ту же room binding и текущего игрока в той же комнате: backend повторно шлёт `ROOM_JOINED` и `INIT_GAME_STATE`, но не делает новый spawn.
@@ -92,6 +99,11 @@
 - В текущем production bundle зарегистрированы две карты: default `caribbean-01` и dev/debug `test-sandbox-01`; внешний room REST/WS contract пока не меняется, но обе уже доступны через `mapId` validation в backend.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.
 - `GameRoom` теперь хранит `MapTemplate` активной комнаты и поднимает runtime bootstrap из карты: initial wind стартует из `defaultWind`, а `INIT_GAME_STATE` включает `roomMeta` с `roomId`, `roomName`, `mapId`, `mapName`, `mapRevision`, `theme` и `bounds`.
+- `GameRoom` также уже хранит room-local authoritative wind state: один и тот же `wind` snapshot включается в `INIT_GAME_STATE` как initial room state и затем приходит в каждом `UPDATE_GAME_STATE` для всех игроков комнаты.
+- По состоянию на `TASK-035` room wind больше не меняется случайным шумом: backend вращает его по часовой стрелке с фиксированной room-wide скоростью, так что все игроки комнаты видят одинаковый предсказуемый drift направления.
+- По состоянию на `TASK-033` ship movement на backend уже зависит от `wind`: `PlayerShipInstance` считает sail drive из силы ветра, относительного угла между курсом корабля и направлением ветра и затем применяет server-authoritative тягу в Box2D world.
+- По состоянию на `TASK-033B` у игрока есть server-authoritative `sailLevel` (`0..3`, default `3`): `PLAYER_INPUT.up/down` меняют его по rising-edge, а итоговая тяга теперь зависит и от room `wind`, и от текущего уровня парусов.
+- Во время reconnect grace `PlayerShipInstance.freeze()` останавливает drift retained ship state, поэтому room resume возвращает игрока в ту же комнату без нового spawn и без нежелательного смещения позиции на стороне backend.
 - Initial spawn для room join вычисляется backend'ом из `spawnPoints` + `spawnRules.playerSpawnRadius` и валидируется по `MapTemplate.bounds`; тот же transport shape переиспользуется для server-side respawn path с `reason=RESPAWN`.
 - `ROOM_JOIN_REJECTED` уже зарезервирован в WebSocket protocol surface, но текущий runtime ещё не отправляет это событие и использует REST error response как authoritative rejection channel.
 - Reconnect grace уже участвует и в room resume, и в empty-room cleanup policy, но всё ещё зависит от in-memory runtime текущего backend-процесса.
@@ -107,6 +119,8 @@
   - `GAME_MAX_ROOMS`
   - `GAME_MAX_PLAYERS_PER_ROOM`
   - `GAME_RECONNECT_GRACE_PERIOD`
+  - `GAME_EMPTY_ROOM_IDLE_TIMEOUT`
+  - `GAME_WIND_ROTATION_SPEED`
 
 - Windows:
   - `\.\gradlew.bat bootRun`
@@ -122,4 +136,5 @@
 - Physics-тесты Box2D/LibGDX используют native-библиотеки: возможны JVM warnings/особенности запуска на разных ОС/архитектурах.
 - Статика фронтенда хранится как build output; ручные правки в `static/assets` легко приводят к рассинхронизации.
 - Empty-room cleanup теперь предсказуем и bounded по `game.room.empty-room-idle-timeout`, но у комнат всё ещё нет owner/host policy или явного manual close flow.
+- Manual room close/leave теперь есть только на уровне player exit-to-lobby (`POST /api/v1/rooms/{roomId}/leave`); owner/host semantics и удаление комнаты по инициативе владельца всё ещё не реализованы.
 - Public chat routing для lobby/room теперь server-authoritative: legacy `to=global` переписывается в текущий scope пользователя, а попытки писать в чужую room group не проходят.

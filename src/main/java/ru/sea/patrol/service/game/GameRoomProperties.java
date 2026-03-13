@@ -12,10 +12,14 @@ public record GameRoomProperties(
 		Integer maxPlayersPerRoom,
 		Duration updatePeriod,
 		Duration reconnectGracePeriod,
-		Duration emptyRoomIdleTimeout
+		Duration emptyRoomIdleTimeout,
+		Double windRotationSpeed
 ) {
 
 	public GameRoomProperties {
+		windRotationSpeed = windRotationSpeed == null
+				? (double) Wind.DEFAULT_ROTATION_SPEED_RAD_PER_SECOND
+				: windRotationSpeed;
 		if (defaultRoomName == null || defaultRoomName.isBlank()) {
 			throw new IllegalArgumentException("game.room.default-room-name must not be blank");
 		}
@@ -33,6 +37,9 @@ public record GameRoomProperties(
 		}
 		if (emptyRoomIdleTimeout == null || emptyRoomIdleTimeout.isZero() || emptyRoomIdleTimeout.isNegative()) {
 			throw new IllegalArgumentException("game.room.empty-room-idle-timeout must be greater than zero");
+		}
+		if (windRotationSpeed == null || windRotationSpeed < 0.0) {
+			throw new IllegalArgumentException("game.room.wind-rotation-speed must be zero or positive");
 		}
 	}
 }

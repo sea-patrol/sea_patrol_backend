@@ -66,7 +66,8 @@ class RoomRegistryTest {
 				100,
 				Duration.ofMillis(100),
 				Duration.ofSeconds(15),
-				Duration.ofSeconds(30)
+				Duration.ofSeconds(30),
+				0.17453292
 		);
 	}
 
@@ -77,7 +78,8 @@ class RoomRegistryTest {
 				100,
 				Duration.ofMillis(100),
 				Duration.ofSeconds(15),
-				Duration.ofMillis(100)
+				Duration.ofMillis(100),
+				0.17453292
 		);
 	}
 

@@ -77,7 +77,8 @@ class WsProtocolParsingTest {
 				100,
 				Duration.ofMillis(100),
 				Duration.ofSeconds(15),
-				Duration.ofSeconds(30)
+				Duration.ofSeconds(30),
+				0.17453292
 		);
 		RoomRegistry roomRegistry = new RoomRegistry(roomProperties);
 		RoomCatalogService roomCatalogService = new RoomCatalogService(roomRegistry, roomProperties, newMapTemplateRegistry(objectMapper));

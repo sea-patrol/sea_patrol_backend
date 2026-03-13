@@ -23,6 +23,7 @@ public class Player {
 	private float height;
 	private float width;
 	private float length;
+	private int sailLevel = 3;
 
 	private GameRoom room;
 	private Disposable roomSubscription;
