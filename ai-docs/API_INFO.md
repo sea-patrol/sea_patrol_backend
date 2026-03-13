@@ -192,6 +192,32 @@ Response `200 OK`:
 - `409` -> `{ "errors": [{ "code": "ROOM_FULL", "message": "Room is full" }] }`
 - `409` -> `{ "errors": [{ "code": "LOBBY_SESSION_REQUIRED", "message": "Active lobby WebSocket session is required" }] }`
 
+### 3.8 `POST /api/v1/rooms/{roomId}/leave` (agreed next contract, not implemented yet)
+`TASK-035A` фиксирует этот endpoint как следующий канонический room-menu flow, но на текущий момент backend runtime его ещё не реализует.
+
+Request body:
+```json
+{}
+```
+
+Планируемый response `200 OK`:
+```json
+{
+  "roomId": "sandbox-1",
+  "status": "LEFT",
+  "nextState": "LOBBY"
+}
+```
+
+Планируемые ошибки:
+- `404` -> `{ "errors": [{ "code": "ROOM_NOT_FOUND", "message": "Room not found" }] }`
+- `409` -> `{ "errors": [{ "code": "ROOM_SESSION_REQUIRED", "message": "Active room WebSocket session is required" }] }`
+- `409` -> `{ "errors": [{ "code": "ROOM_SESSION_MISMATCH", "message": "Player is not bound to this room" }] }`
+
+Планируемая WS-семантика:
+- отдельный `ROOM_LEFT` message type в MVP не требуется;
+- после успешного REST leave backend должен rebinding'ить ту же сессию в `lobby` и отправлять `ROOMS_SNAPSHOT` как первый authoritative lobby snapshot.
+
 ## 4. WebSocket API (`/ws/game`)
 ### 4.1 Транспортный формат и session policy
 ### Session policy
